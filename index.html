@@ -109,7 +109,7 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
   scene.add( line );
 
 //SQ
-const geo = new THREE.BufferGeometry();
+/*const geo = new THREE.BufferGeometry();
   const vertices = [
     -1, 0, z,
     1, 0, z,
@@ -125,7 +125,7 @@ const geo = new THREE.BufferGeometry();
   const mat = new THREE.MeshBasicMaterial();
   const sq = new THREE.Mesh(geo, mat);
   scene.add(sq);
-
+*/
 
   // l-r = 6*100=600
   // t-b = 4*100=400
@@ -467,6 +467,8 @@ function frame(){
    ctx.strokeStyle="rgba("+r+","+g+","+b+",200)";
    ctx.beginPath(); ctx.moveTo(cd[lines-i][0],cd[lines-i][1]);
    ctx.lineTo(cd[lines-i][2],cd[lines-i][3]); ctx.stroke();
+
+
    qix[i].material.color.r=r/255;
    qix[i].material.color.g=g/255;
    qix[i].material.color.b=b/255;
@@ -478,6 +480,7 @@ function frame(){
    qix[i].geometry.attributes.position.array[4]=trz(cd[lines-i][3],3);
    //qix[i].geometry.attributes.position.array[5]=trz((cd[lines-i][3])/3,1);
    qix[i].geometry.attributes.position.needsUpdate = true;
+   
    //console.log('cd',cd[i]);
    //console.log('q1',qix[1].geometry.attributes.position.array[1]);
    //console.log('q2',qix[i].geometry.attributes.position.array[1]);
