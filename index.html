@@ -6,7 +6,15 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 	</head>
 	<body>
- <script type="importmap">
+ <!--<script type="importmap">
+			{
+				"imports": {
+					"three": "./three/build/three.module.js",
+					"three/addons/": "./three/examples/jsm/"
+				}
+			}
+		</script> -->
+  <script type="importmap">
 			{
 				"imports": {
 					"three": "./three/build/three.module.js",
@@ -15,10 +23,20 @@
 			}
 		</script>
 
+<canvas id="can">No canvas</canvas>
 <style>
 body{padding:0;margin:0;overflow:hidden;background:black;}
 #VRButton { left:calc(50% + 50px) !important; }
 </style>
+
+<script>
+ //globals
+ var qix=[];// 3d lines
+ //var qiz=[];// coords
+ var fps=30,step=10,lines=50,chc=lines/6,lw=3;
+ var marker;
+ var ww=window.innerWidth, hh=window.innerHeight;
+</script>
 
 <script type="module">
 	import * as THREE from 'three';
@@ -27,6 +45,7 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 			import { VRButton } from 'three/addons/webxr/VRButton.js';
    import { ARButton } from 'three/addons/webxr/ARButton.js';
    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+   //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
    //import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -35,108 +54,26 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 
    let controller1, controller2;
 			let controllerGrip1, controllerGrip2;
-   let controls,group,linex, playArea, playAreaVerts, isDrawing = false, playerPath = [], playerLine = null;
+   let controls,group,linex;
+   //let handedness;
 
-   // Game variables
-   var qix=[];
-   var marker;
-   var fps=30,step=10,lines=50,chc=lines/6,lw=3;
-   var rb=["201","001","010","110","120","100"];
-   var rbi=0;
-   var mx,my,iii=999,nm=0;
-   var cd=[],rgb=[],cvs=[];
-   var vt=[];
-   var ww, hh;
-
-
-function isonedge(point, polygon) {
-  for (var i = 0; i < polygon.length; i++) {
-    let p1 = polygon[i];
-    let p2 = polygon[(i + 1) % polygon.length]; // Next vertex, wraps around
-    let tolerance = 0.1;
-    let dist = point.distanceTo(p1) + point.distanceTo(p2);
-    let edgeLength = p1.distanceTo(p2);
-    if (Math.abs(dist - edgeLength) < tolerance) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function findEdge(point, polygon) {
-  for (var i = 0; i < polygon.length; i++) {
-    let p1 = polygon[i];
-    let p2 = polygon[(i + 1) % polygon.length];
-    let tolerance = 0.1;
-    let dist = point.distanceTo(p1) + point.distanceTo(p2);
-    let edgeLength = p1.distanceTo(p2);
-    if (Math.abs(dist - edgeLength) < tolerance) {
-      return i; // Return the index of the starting vertex of the edge
-    }
-  }
-  return -1;
-}
-
-function isInside(point, vs) {
-    // ray-casting algorithm based on
-    // https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html/pnpoly.html
-
-    var x = point[0], y = point[1];
-
-    var inside = false;
-    for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-        var xi = vs[i][0], yi = vs[i][1];
-        var xj = vs[j][0], yj = vs[j][1];
-
-        var intersect = ((yi > y) != (yj > y))
-            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-
-    return inside;
-}
-
-function trz(n,d=1){
- //write translation to convert 600x400 to (-3 to 3) and (0 to 4)
- var out;
- if (d==1) {
-  out=(n-(ww/2))/(ww/6); // 600 to 3 is (x-300)/100
- }
- if (d==3) {
-  out= 4-(n/(hh/4)); // 400 to 4 is y/100
- }
- return out;
-}
-
-function rand(lo,hi=1,st=0){
- if (lo=="t"){out=Math.round(Math.random()) ? -1:1;}else{out=(Math.round(Math.random()*(hi-lo)))+lo;}
- return st ? String(out):out;
-}
-
-function x(x){
-  let out=[0,0,0];
-  for (let z=0;z<3;z++){
-   if (x[z]=="0") { out[z]=0 }
-   else if (x[z]=="1") { out[z]=cvs[lines-1] }
-   else if (x[z]=="2") { out[z]=cvs[lines-1]/2 }
-  }
-  return out;
-}
+			//let INTERSECTION;
+			//const tempMatrix = new THREE.Matrix4();
 
  init();
 
  function init() {
 
-    ww = window.innerWidth;
-    hh = window.innerHeight;
-    mx = ww;
-    my = hh;
 
 	scene = new THREE.Scene();
 		scene.background = new THREE.Color( 0x505050 );
 
   camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, .1, 1000 );
   camera.position.set( 1.6,2 ,-4 );scene.add( camera );
+
+  //const light = new THREE.AmbientLight( 0xffffff, 3 );
+  //const light = new THREE.AmbientLight( 0xffffff,2 ); // soft white light
+  //scene.add( light );
 
 		const light = new THREE.DirectionalLight( 0xffffff, 3 );
 				light.position.set( 0, 6, 0 );
@@ -147,6 +84,10 @@ function x(x){
 				light.shadow.camera.left = - 3;
 				light.shadow.mapSize.set( 4096, 4096 );
 				scene.add( light );
+
+			//const light = new THREE.HemisphereLight( 0xfff0f0, 0x60606, 3 );
+			//light.position.set( 1, 1, 1 );
+			//scene.add( light );
 
 		marker = new THREE.Mesh(
 			new THREE.CircleGeometry( 0.05, 8 ),//.rotateX( -Math.PI/2 ),
@@ -164,32 +105,16 @@ function x(x){
 		scene.add( floor );
 
   const material = new THREE.LineBasicMaterial({ color: 0x000000 });
-  const l=-3.05,r=3.05,t=4.05,b=-0.05,z=-5;
-
-  playAreaVerts = [
-    new THREE.Vector3( l, b, z ),
-    new THREE.Vector3( l, t, z ),
-    new THREE.Vector3( r, t, z ),
-    new THREE.Vector3( r, b, z )
-  ];
-
-  const playAreaGeometry = new THREE.BufferGeometry().setFromPoints( playAreaVerts );
-  playArea = new THREE.LineLoop( playAreaGeometry, material );
-  scene.add( playArea );
-
-  window.playAreaCanvasVerts = playAreaVerts.map(v => {
-    const x = (v.x * (window.innerWidth / 6)) + (window.innerWidth / 2);
-    const y = (4 - v.y) * (window.innerHeight / 4);
-    return [x, y];
-  });
-
-  group = new THREE.Group();
-  scene.add(group);
-
-  const geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
-  const mesh = new THREE.Mesh( geometry, new THREE.MeshNormalMaterial() );
-  group.add(mesh);
-
+  var l=-3.05,r=3.05,t=4.05,b=-0.05,z=-5;
+  const points = []; //black square
+  points.push( new THREE.Vector3( l, b, z ) );
+  points.push( new THREE.Vector3( l, t, z ) );
+  points.push( new THREE.Vector3( r, t, z ) );
+  points.push( new THREE.Vector3( r, b, z ) );
+  points.push( new THREE.Vector3( l, b, z ) );
+  const geometry = new THREE.BufferGeometry().setFromPoints( points );
+  const line = new THREE.Line( geometry, material );
+  scene.add( line );
 
 //SQ
 const geo = new THREE.BufferGeometry();
@@ -209,13 +134,21 @@ const geo = new THREE.BufferGeometry();
   const sq = new THREE.Mesh(geo, mat);
   scene.add(sq);
 
-  for (let i=0;i<lines;i++){
-    nm+=Math.round(255/lines);
-    cvs.push(nm);
-    rgb.push([ 0,0,0 ]);
-  }
+
+  // l-r = 6*100=600
+  // t-b = 4*100=400
+  // total scaled is 600x400
+  //write translation to convert 600x400 to (-3 to 3) and (0 to 4)
+  // 4 to 400 is y*100
+  // 400 to 4 is y/100
+  // 3 to 600 is (x*100)+300
+  // 600 to 3 is (x-300)/100
+
 
   var x1=1,x2=1,y1=2,y2=0;
+
+  //console.log(new THREE.Vector3( x1, y1, z ));
+  //console.log(new THREE.Vector3( x2, y2, z ));
 
   for (let i=1;i<lines;i++){
    var lnclr = new THREE.LineBasicMaterial({ color: 0x00ff00 });
@@ -237,8 +170,11 @@ const geo = new THREE.BufferGeometry();
 	 renderer.xr.addEventListener( 'sessionstart', () => baseReferenceSpace = renderer.xr.getReferenceSpace() );
 	renderer.xr.enabled = true;
 
+  //renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		//renderer.toneMappingExposure = 1;
   renderer.autoClear = false;
 
+  //renderer.xr.setReferenceSpaceType( 'local' );
 	document.body.appendChild( renderer.domElement );
 	document.body.appendChild( VRButton.createButton( renderer ) );
   document.body.appendChild( ARButton.createButton( renderer ) );
@@ -276,25 +212,8 @@ const geo = new THREE.BufferGeometry();
 				raycaster = new THREE.Raycaster();
 
     controls = new TransformControls( camera, renderer.domElement );
-	controls.attach( group.children[ 0 ] );
-	scene.add( controls );
-
-	window.addEventListener( 'keydown', function ( event ) {
-		switch ( event.key ) {
-			case 'q':
-				controls.setSpace( controls.space === 'local' ? 'world' : 'local' );
-				break;
-			case 'w':
-				controls.setMode( 'translate' );
-				break;
-			case 'e':
-				controls.setMode( 'rotate' );
-				break;
-			case 'r':
-				controls.setMode( 'scale' );
-				break;
-		}
-	} );
+				//controls.attach( group.children[ 0 ] );
+				scene.add( controls.getHelper() );
  }
 			function onSelect( event ) {
 
@@ -318,6 +237,15 @@ const geo = new THREE.BufferGeometry();
 				}
 
 				raycaster.setFromXRController( controller );
+
+				//const intersects = raycaster.intersectObjects( group.children );
+
+				//if ( intersects.length > 0 ) {
+
+					//controls.attach( intersects[ 0 ].object );
+
+			//	}
+
 			}
 
 			function onControllerEvent( event ) {
@@ -327,16 +255,22 @@ const geo = new THREE.BufferGeometry();
 				if ( controller.userData.active === false ) return;
 
 				controls.getRaycaster().setFromXRController( controller );
+     //console.log(controls);
+    //console.log(event.type);
 
 				switch ( event.type ) {
 
 					case 'selectstart':
+						//controls.pointerDown( null );
 						break;
 
 					case 'selectend':
+						//controls.pointerUp( null );
 						break;
 
 					case 'move':
+						//controls.pointerHover( null );
+						//controls.pointerMove( null );
 						break;
 
 				}
@@ -360,14 +294,19 @@ const geo = new THREE.BufferGeometry();
       axes: source.gamepad.axes.slice(0)
      }
     }
+     //console.log(hand,data.buttons[4],data.buttons[5],data.axes[2]);
+     //console.log(data);
 
       if (data[1]){
+       //up-dn
        a=Math.abs(data[1].axes[3]);
        b=Math.abs(data[2].axes[3]);
        c=a>b?data[1].axes[3]:data[2].axes[3];
+       //lf-rt
        a=Math.abs(data[1].axes[2]);
        b=Math.abs(data[2].axes[2]);
        d=a>b?data[1].axes[2]:data[2].axes[2];
+       //console.log(c,d);
       }
 
       if (Math.abs(c)>0 || Math.abs(d)>0) {
@@ -383,176 +322,27 @@ const geo = new THREE.BufferGeometry();
       if (marker.position.y<-.05){ marker.position.y=-.05; }
 
       }
-
-    // Drawing logic
-    if (data[1]) { // Check if left controller exists
-     if (data[1].buttons[0] > 0.5 && !isDrawing) {
-      if (isonedge(marker.position, playAreaVerts)) {
-       isDrawing = true;
-       playerPath = [marker.position.clone()];
-      }
      }
-
-     if (data[1].buttons[0] < 0.5 && isDrawing) {
-      isDrawing = false;
-      if(playerLine){
-       playerLine.geometry.dispose();
-       playerLine.material.dispose();
-       scene.remove(playerLine);
-       playerLine = null;
-      }
-      playerPath = [];
+     /*
+     if (data[1].axes[3] || data[2].axes[3]){
+      a=data[1].axes[3]<0?data[1].axes[3]*-1:data[1].axes[3];
+      b=data[2].axes[3]<0?data[2].axes[3]*-1:data[2].axes[3];
+      c=a>b?data[1].axes[3]:data[2].axes[3];
+      console.log(a,b,c);
+      marker.position.y-= c/50;
      }
+     if (data.axes[2]){
+      marker.position.x+=data.axes[2]/50;
+     }
+     if (data.buttons[4]){
+      //marker.position.x+=.01;
+    }    if (data.buttons[5]){
+      //marker.position.x-=.01;
     }
 
-    if (isDrawing) {
-     playerPath.push(marker.position.clone());
+   }
 
-     if (playerLine) {
-      playerLine.geometry.dispose();
-      scene.remove(playerLine);
-     }
-     const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff });
-     const lineGeometry = new THREE.BufferGeometry().setFromPoints(playerPath);
-     playerLine = new THREE.Line(lineGeometry, lineMaterial);
-     scene.add(playerLine);
-
-     if (playerPath.length > 2 && isonedge(marker.position, playAreaVerts)) {
-      isDrawing = false;
-
-      let startPoint = playerPath[0];
-      let endPoint = playerPath[playerPath.length - 1];
-      let startEdgeIndex = findEdge(startPoint, playAreaVerts);
-      let endEdgeIndex = findEdge(endPoint, playAreaVerts);
-
-      if (startEdgeIndex !== -1 && endEdgeIndex !== -1) {
-          let polyA = [];
-          polyA.push(startPoint);
-          let i = (startEdgeIndex + 1) % playAreaVerts.length;
-          while (i !== (endEdgeIndex + 1) % playAreaVerts.length) {
-              polyA.push(playAreaVerts[i]);
-              i = (i + 1) % playAreaVerts.length;
-          }
-          polyA.push(endPoint);
-          polyA.push(...[...playerPath].reverse());
-
-          let polyB = [];
-          polyB.push(endPoint);
-          i = (endEdgeIndex + 1) % playAreaVerts.length;
-          while (i !== (startEdgeIndex + 1) % playAreaVerts.length) {
-              polyB.push(playAreaVerts[i]);
-              i = (i + 1) % playAreaVerts.length;
-          }
-          polyB.push(startPoint);
-          polyB.push(...playerPath);
-
-          let polyA_canvas = polyA.map(v => {
-              const x = (v.x * (ww / 6)) + (ww / 2);
-              const y = (4 - v.y) * (hh / 4);
-              return [x, y];
-          });
-          let polyB_canvas = polyB.map(v => {
-              const x = (v.x * (ww / 6)) + (ww / 2);
-              const y = (4 - v.y) * (hh / 4);
-              return [x, y];
-          });
-
-          let qix_p1 = [cd[0][0], cd[0][1]];
-          let qix_p2 = [cd[0][2], cd[0][3]];
-          let newPlayAreaVerts = null;
-
-          if (isInside(qix_p1, polyA_canvas) || isInside(qix_p2, polyA_canvas)) {
-              newPlayAreaVerts = polyA;
-          } else {
-              newPlayAreaVerts = polyB;
-          }
-
-          playAreaVerts = newPlayAreaVerts;
-          playArea.geometry.dispose();
-          playArea.geometry = new THREE.BufferGeometry().setFromPoints(playAreaVerts);
-
-          window.playAreaCanvasVerts = playAreaVerts.map(v => {
-              const x = (v.x * (ww / 6)) + (ww / 2);
-              const y = (4 - v.y) * (hh / 4);
-              return [x, y];
-          });
-      }
-
-      if(playerLine){
-       playerLine.geometry.dispose();
-       playerLine.material.dispose();
-       scene.remove(playerLine);
-       playerLine = null;
-      }
-      playerPath = [];
-     }
-    }
-
-    // Qix logic
-    iii++;
-    let tmp;
-    if (iii>chc){
-     iii=0;
-     rbi++;
-     rbi= rbi>rb.length-1 ? 0 : rbi;
-
-     tmp=[ rb[rbi][0],rb[rbi][1],rb[rbi][2]] ;
-     tmp=x(tmp);
-    } else {
-     tmp=[rgb[lines-1][0],rgb[lines-1][1],rgb[lines-1][2]];
-    }
-    rgb.shift();
-    rgb.push(tmp);
-
-    for (let i=0;i<lines;i++){
-
-    if (i<lines-1){
-     for (let it=0;it<3;it++){
-      if (rgb[i][it]==0) { rgb[i][it]=0 }
-      else if (rgb[i][it]<cvs[i+1]) { rgb[i][it]=cvs[i]/2 }
-      else { rgb[i][it]=cvs[i] }
-     }
-    }
-
-     if (cd[i]==undefined && i>0){
-      cd.push([cd[i-1][0]+step,cd[i-1][1]+step,cd[i-1][2]+step,cd[i-1][3]+step]);
-     }
-     if (cd[i]==undefined && i==0){
-      cd.push([rand(9,mx-9),rand(9,my-9),rand(9,mx-9),rand(9,my-9)]);
-      vt=[rand("t"),rand("t"),rand("t"),rand("t")];
-     }
-     if (i==0){
-      if (window.playAreaCanvasVerts && window.playAreaCanvasVerts.length > 0) {
-          let p1_next = [cd[i][0] + vt[0]*step, cd[i][1] + vt[1]*step];
-          if (!isInside(p1_next, window.playAreaCanvasVerts)) {
-              vt[0] *= -1;
-              vt[1] *= -1;
-          }
-
-          let p2_next = [cd[i][2] + vt[2]*step, cd[i][3] + vt[3]*step];
-          if (!isInside(p2_next, window.playAreaCanvasVerts)) {
-              vt[2] *= -1;
-              vt[3] *= -1;
-          }
-      }
-      cd.unshift([cd[i][0]+vt[0]*step,cd[i][1]+vt[1]*step,cd[i][2]+vt[2]*step,cd[i][3]*vt[3]*step]);
-      cd.pop();
-     }
-     if (cd[lines-i]!=undefined){
-      let r=rgb[i][0]; let g=rgb[i][1]; let b=rgb[i][2];
-      qix[i].material.color.r=r/255;
-      qix[i].material.color.g=g/255;
-      qix[i].material.color.b=b/255;
-
-      qix[i].geometry.attributes.position.array[0]=trz(cd[lines-i][0],1);
-      qix[i].geometry.attributes.position.array[1]=trz(cd[lines-i][1],3);
-      qix[i].geometry.attributes.position.array[3]=trz(cd[lines-i][2],1);
-      qix[i].geometry.attributes.position.array[4]=trz(cd[lines-i][3],3);
-      qix[i].geometry.attributes.position.needsUpdate = true;
-     }
-    }
-
-     }
+  */
 
   renderer.render( scene, camera );
  }
@@ -561,9 +351,147 @@ const geo = new THREE.BufferGeometry();
 		camera.aspect = window.innerWidth / window.innerHeight;
 		camera.updateProjectionMatrix();
 		renderer.setSize( window.innerWidth, window.innerHeight );
-        mx = window.innerWidth;
-        my = window.innerHeight;
  }
+
+</script>
+<script>
+
+function trz(n,d=1){
+ //write translation to convert 600x400 to (-3 to 3) and (0 to 4)
+ var out;
+ if (d==1) {
+  out=(n-(ww/2))/(ww/6); // 600 to 3 is (x-300)/100
+ }
+ if (d==2) {
+  //out=n*my; // 4 to 400 is y*100
+ }
+ if (d==3) {
+  out= 4-(n/(hh/4)); // 400 to 4 is y/100
+ }
+ if (d==4) {
+  //out=(n*100)+(mx/2); // 3 to 600 is (x*100)+300
+ }
+ return out;
+}
+
+
+
+//var fps=30,step=10,lines=100,chc=lines/6,lw=3;
+var rb=["201","001","010","110","120","100"]; rbi=0;
+var mx,my,iii,nm=0,iii=999;
+var cd=[],rgb=[],cvs=[];
+var can=document.getElementById("can");
+var ctx=can.getContext("2d");
+ctx.lineWidth=lw;
+for (let i=0;i<lines;i++){
+  nm+=Math.round(255/lines);
+  cvs.push(nm);
+  rgb.push([ 0,0,0 ]);
+}
+window.onresize = function(event) { init(); };
+init();
+setInterval(frame,1000/fps);
+
+function init(){
+ can.width=window.innerWidth; can.height=window.innerHeight;
+ mx=can.width; my=can.height;
+}
+
+function rand(lo,hi=1,st=0){
+ if (lo=="t"){out=Math.round(Math.random()) ? -1:1;}else{out=(Math.round(Math.random()*(hi-lo)))+lo;}
+ return st ? String(out):out;
+}
+
+function x(x){
+  out=[0,0,0];
+  for (let z=0;z<3;z++){
+   if (x[z]=="0") { out[z]=0 }
+   else if (x[z]=="1") { out[z]=cvs[lines-1] }
+   else if (x[z]=="2") { out[z]=cvs[lines-1]/2 }
+  }
+  return out;
+}
+
+function frame(){
+ iii++;
+ if (iii>chc){
+  iii=0;
+  rbi++;
+  rbi= rbi>rb.length-1 ? 0 : rbi;
+
+  tmp=[ rb[rbi][0],rb[rbi][1],rb[rbi][2]] ;
+  tmp=x(tmp);
+ } else {
+  tmp=[rgb[lines-1][0],rgb[lines-1][1],rgb[lines-1][2]];
+ }
+ rgb.shift();
+ rgb.push(tmp);
+
+ ctx.fillStyle="#000000";
+ ctx.fillRect(0,0,mx,my);
+ for (let i=0;i<lines;i++){
+
+ if (i<lines-1){
+  for (let it=0;it<3;it++){
+   if (rgb[i][it]==0) { rgb[i][it]=0 }
+   else if (rgb[i][it]<cvs[i+1]) { rgb[i][it]=cvs[i]/2 }
+   else { rgb[i][it]=cvs[i] }
+  }
+ }
+
+  if (cd[i]==undefined && i>0){
+   cd.push([cd[i-1][0]+step,cd[i-1][1]+step,cd[i-1][2]+step,cd[i-1][3]+step]);
+  }
+  if (cd[i]==undefined && i==0){
+   cd.push([rand(9,mx-9),rand(9,my-9),rand(9,mx-9),rand(9,my-9)]);
+   vt=[rand("t"),rand("t"),rand("t"),rand("t")];
+  }
+  if (i==0){
+   if (cd[i][0]>5 && cd[i][0]<mx-5){
+    vt[0]=rand(0,200)!=1 ? vt[0] : vt[0]*-1;
+   }
+   if (cd[i][1]>5 && cd[i][1]<my-5){
+    vt[1]=rand(0,200)!=1 ? vt[1] : vt[1]*-1;
+   }
+   if (cd[i][2]>5 && cd[i][2]<mx-5){
+    vt[2]=rand(0,200)!=1 ? vt[2] : vt[2]*-1;
+   }
+   if (cd[i][3]>5 && cd[i][3]<my-5){
+    vt[3]=rand(0,200)!=1 ? vt[3] : vt[3]*-1;
+   }
+   if(cd[i][0]>mx){ vt[0]=-1; }
+   if(cd[i][0]<0) { vt[0]=1; }
+   if(cd[i][1]>my){ vt[1]=-1; }
+   if(cd[i][1]<0) { vt[1]=1; }
+   if(cd[i][2]>mx){ vt[2]=-1; }
+   if(cd[i][2]<0) { vt[2]=1; }
+   if(cd[i][3]>my){ vt[3]=-1; }
+   if(cd[i][3]<0) { vt[3]=1; }
+   cd.unshift([cd[i][0]+vt[0]*step,cd[i][1]+vt[1]*step,cd[i][2]+vt[2]*step,cd[i][3]+vt[3]*step]);
+   cd.pop();
+  }
+  if (cd[lines-i]!=undefined){
+   r=rgb[i][0]; g=rgb[i][1]; b=rgb[i][2];
+   ctx.strokeStyle="rgba("+r+","+g+","+b+",200)";
+   ctx.beginPath(); ctx.moveTo(cd[lines-i][0],cd[lines-i][1]);
+   ctx.lineTo(cd[lines-i][2],cd[lines-i][3]); ctx.stroke();
+   qix[i].material.color.r=r/255;
+   qix[i].material.color.g=g/255;
+   qix[i].material.color.b=b/255;
+
+   qix[i].geometry.attributes.position.array[0]=trz(cd[lines-i][0],1);
+   qix[i].geometry.attributes.position.array[1]=trz(cd[lines-i][1],3);
+   //qix[i].geometry.attributes.position.array[2]=trz((cd[lines-i][1])/3,1);
+   qix[i].geometry.attributes.position.array[3]=trz(cd[lines-i][2],1);
+   qix[i].geometry.attributes.position.array[4]=trz(cd[lines-i][3],3);
+   //qix[i].geometry.attributes.position.array[5]=trz((cd[lines-i][3])/3,1);
+   qix[i].geometry.attributes.position.needsUpdate = true;
+   //console.log('cd',cd[i]);
+   //console.log('q1',qix[1].geometry.attributes.position.array[1]);
+   //console.log('q2',qix[i].geometry.attributes.position.array[1]);
+  }
+ }
+}
 
 </script>
 </body>
