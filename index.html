@@ -183,6 +183,14 @@ function x(x){
     return [x, y];
   });
 
+  group = new THREE.Group();
+  scene.add(group);
+
+  const geometry = new THREE.BoxGeometry( 0.2, 0.2, 0.2 );
+  const mesh = new THREE.Mesh( geometry, new THREE.MeshNormalMaterial() );
+  group.add(mesh);
+
+
 //SQ
 const geo = new THREE.BufferGeometry();
   const vertices = [
@@ -268,8 +276,25 @@ const geo = new THREE.BufferGeometry();
 				raycaster = new THREE.Raycaster();
 
     controls = new TransformControls( camera, renderer.domElement );
-				//controls.attach( group.children[ 0 ] );
-				scene.add( controls.getHelper() );
+	controls.attach( group.children[ 0 ] );
+	scene.add( controls );
+
+	window.addEventListener( 'keydown', function ( event ) {
+		switch ( event.key ) {
+			case 'q':
+				controls.setSpace( controls.space === 'local' ? 'world' : 'local' );
+				break;
+			case 'w':
+				controls.setMode( 'translate' );
+				break;
+			case 'e':
+				controls.setMode( 'rotate' );
+				break;
+			case 'r':
+				controls.setMode( 'scale' );
+				break;
+		}
+	} );
  }
 			function onSelect( event ) {
 
@@ -433,9 +458,10 @@ const geo = new THREE.BufferGeometry();
           });
 
           let qix_p1 = [cd[0][0], cd[0][1]];
+          let qix_p2 = [cd[0][2], cd[0][3]];
           let newPlayAreaVerts = null;
 
-          if (isInside(qix_p1, polyA_canvas)) {
+          if (isInside(qix_p1, polyA_canvas) || isInside(qix_p2, polyA_canvas)) {
               newPlayAreaVerts = polyA;
           } else {
               newPlayAreaVerts = polyB;
