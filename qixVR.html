@@ -6,15 +6,23 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 	</head>
 	<body>
- <script type="importmap">
+ <!--<script type="importmap">
 			{
 				"imports": {
-					"three": "../vr/three.js-r178/build/three.module.js",
-					"three/addons/": "../vr/three.js-r178/examples/jsm/"
+					"three": "./three/build/three.module.js",
+					"three/addons/": "./three/examples/jsm/"
 				}
 			}
-		</script>
-
+		</script> -->
+  <script type="importmap">
+			{
+				"imports": {
+					"three": "../three.js-r178/build/three.module.js",
+					"three/addons/": "../three.js-r178/examples/jsm/"
+				}
+			}
+	</script>
+ 
 <canvas id="can">No canvas</canvas>
 <style>
 body{padding:0;margin:0;overflow:hidden;background:black;}
@@ -37,6 +45,7 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 			import { VRButton } from 'three/addons/webxr/VRButton.js';
    import { ARButton } from 'three/addons/webxr/ARButton.js';
    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+   //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
    //import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
    
