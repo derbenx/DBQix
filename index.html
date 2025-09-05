@@ -9,8 +9,8 @@
  <script type="importmap">
 			{
 				"imports": {
-					"three": "../vr/three.js-r178/build/three.module.js",
-					"three/addons/": "../vr/three.js-r178/examples/jsm/"
+					"three": "./three/build/three.module.js",
+					"three/addons/": "./three/examples/jsm/"
 				}
 			}
 		</script>
@@ -464,15 +464,16 @@ const geo = new THREE.BufferGeometry();
 
     // Qix logic
     iii++;
+    let tmp;
     if (iii>chc){
      iii=0;
      rbi++;
      rbi= rbi>rb.length-1 ? 0 : rbi;
 
-     let tmp=[ rb[rbi][0],rb[rbi][1],rb[rbi][2]] ;
+     tmp=[ rb[rbi][0],rb[rbi][1],rb[rbi][2]] ;
      tmp=x(tmp);
     } else {
-     let tmp=[rgb[lines-1][0],rgb[lines-1][1],rgb[lines-1][2]];
+     tmp=[rgb[lines-1][0],rgb[lines-1][1],rgb[lines-1][2]];
     }
     rgb.shift();
     rgb.push(tmp);
