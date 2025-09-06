@@ -4,6 +4,7 @@
 		<title>qix</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.jsdelivr.net/npm/polygon-clipping@0.15.3/dist/polygon-clipping.min.js"></script>
 	</head>
 	<body>
   <script type="importmap">
@@ -15,6 +16,7 @@
 			}
 		</script>
 
+<canvas id="can">No canvas</canvas>
 <style>
 body{padding:0;margin:0;overflow:hidden;background:black;}
 #VRButton { left:calc(50% + 50px) !important; }
@@ -42,20 +44,114 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 
 			let camera, scene, raycaster, renderer;
 			let floor, baseReferenceSpace;
+   let perimeterPoints = [], perimeterLine;
+   let playerSegmentIndex = 0;
+   let playerSegmentProgress = 0.0;
+   let isDrawing = false;
+   let playerLine;
+   let playerLinePoints = [];
+   let startSegmentIndex, startSegmentProgress;
+   let currentDrawingDirection = 'none';
 
    let controller1, controller2;
 			let controllerGrip1, controllerGrip2;
    let controls,group,linex;
    //let handedness;
-   let isDrawing = false;
-   let playerLine;
-   let playerLinePoints = [];
-   const z = -5;
-   let gameAreaShape;
-   const l = -3.05, r = 3.05, t = 4.05, b = -0.05;
 
 			//let INTERSECTION;
 			//const tempMatrix = new THREE.Matrix4();
+
+   function getIntersectionPoint(p1, q1, p2, q2) {
+    const r = new THREE.Vector3().subVectors(q1, p1);
+    const s = new THREE.Vector3().subVectors(q2, p2);
+    const rxs = r.x * s.y - r.y * s.x;
+    const qp = new THREE.Vector3().subVectors(p2, p1);
+    const qpxr = qp.x * r.y - qp.y * r.x;
+
+    if (rxs === 0) return null; // Parallel or collinear
+
+    const t = (qp.x * s.y - qp.y * s.x) / rxs;
+    const u = qpxr / rxs;
+
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        return new THREE.Vector3().addVectors(p1, r.multiplyScalar(t));
+    }
+
+    return null;
+   }
+
+   function pointInPolygon(point, polygon) {
+    let odd = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; i++) {
+        const xi = polygon[i].x, yi = polygon[i].y;
+        const xj = polygon[j].x, yj = polygon[j].y;
+
+        if (((yi > point.y) !== (yj > point.y))
+            && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
+            odd = !odd;
+        }
+        j = i;
+    }
+    return odd;
+   };
+
+   function isPointOnSegment(p, a, b, tolerance = 0.001) {
+    const ab = new THREE.Vector3().subVectors(b, a);
+    const ap = new THREE.Vector3().subVectors(p, a);
+    const cross = new THREE.Vector3().crossVectors(ab, ap).length();
+    if (cross > tolerance) return false; // Not collinear
+
+    const dot = ab.dot(ap);
+    if (dot < 0) return false; // Outside segment, before a
+
+    const lenSq = ab.lengthSq();
+    if (dot > lenSq) return false; // Outside segment, after b
+
+    return true;
+   }
+
+   function getClosestPointOnSegment(p, a, b) {
+    const ab = new THREE.Vector3().subVectors(b, a);
+    const ap = new THREE.Vector3().subVectors(p, a);
+    const t = ap.dot(ab) / ab.lengthSq();
+    if (t < 0.0) return a.clone();
+    if (t > 1.0) return b.clone();
+    return new THREE.Vector3().addVectors(a, ab.multiplyScalar(t));
+   }
+
+   function toGeoJSON(points) {
+    return [[points.map(p => [p.x, p.y])]];
+   }
+
+   function fromGeoJSON(polygon) {
+    return polygon[0][0].map(p => new THREE.Vector3(p[0], p[1], -5));
+   }
+
+   function getPolygonArea(points) {
+    let area = 0;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        area += points[i].x * points[j].y;
+        area -= points[j].x * points[i].y;
+    }
+    return Math.abs(area / 2);
+   }
+
+   function updateGameArea(newPerimeterPoints) {
+    perimeterPoints = newPerimeterPoints;
+
+    // Update visual border
+    scene.remove(perimeterLine);
+    const perimeterMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+    const perimeterGeometry = new THREE.BufferGeometry().setFromPoints([...perimeterPoints, perimeterPoints[0]]);
+    perimeterLine = new THREE.Line(perimeterGeometry, perimeterMaterial);
+    scene.add(perimeterLine);
+
+    // Update floor mesh
+    const floorShape = new THREE.Shape(perimeterPoints.map(p => new THREE.Vector2(p.x, p.y)));
+    const floorGeometry = new THREE.ShapeGeometry(floorShape);
+    floor.geometry.dispose();
+    floor.geometry = floorGeometry;
+   }
 
  init();
 
@@ -92,33 +188,31 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 		);
   scene.add( marker ); //player
   marker.rotateZ( -Math.PI/2 );
-  marker.position.z=-5;
-  marker.position.y=-.05;
 
+  // Game area
+  const l = -3.05, r = 3.05, t = 4.05, b = -0.05, z = -5;
+  perimeterPoints = [
+      new THREE.Vector3(l, t, z),
+      new THREE.Vector3(r, t, z),
+      new THREE.Vector3(r, b, z),
+      new THREE.Vector3(l, b, z)
+  ];
+
+  // Visual border
+  const perimeterMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+  const perimeterGeometry = new THREE.BufferGeometry().setFromPoints([...perimeterPoints, perimeterPoints[0]]);
+  perimeterLine = new THREE.Line(perimeterGeometry, perimeterMaterial);
+  scene.add(perimeterLine);
+
+  // Floor mesh
+  const floorShape = new THREE.Shape(perimeterPoints.map(p => new THREE.Vector2(p.x, p.y)));
+  const floorGeometry = new THREE.ShapeGeometry(floorShape);
   const floorMaterial = new THREE.MeshBasicMaterial({ color: 0xbcbcbc, transparent: true, opacity: 0.25 });
-  gameAreaShape = new THREE.Shape();
-  gameAreaShape.moveTo(l, b);
-  gameAreaShape.lineTo(l, t);
-  gameAreaShape.lineTo(r, t);
-  gameAreaShape.lineTo(r, b);
-  gameAreaShape.lineTo(l, b);
-
-  const floorGeometry = new THREE.ShapeGeometry(gameAreaShape);
   floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.position.z = z;
   scene.add(floor);
 
-
-  const material = new THREE.LineBasicMaterial({ color: 0x000000 });
-  const points = []; //black square
-  points.push( new THREE.Vector3( l, b, z ) );
-  points.push( new THREE.Vector3( l, t, z ) );
-  points.push( new THREE.Vector3( r, t, z ) );
-  points.push( new THREE.Vector3( r, b, z ) );
-  points.push( new THREE.Vector3( l, b, z ) );
-  const geometry = new THREE.BufferGeometry().setFromPoints( points );
-  const line = new THREE.Line( geometry, material );
-  scene.add( line );
+  marker.position.copy(perimeterPoints[0]);
 
 //SQ
 /*const geo = new THREE.BufferGeometry();
@@ -264,32 +358,36 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 
 				switch ( event.type ) {
 
-     case 'selectstart':
-      if (!isDrawing) {
+					case 'selectstart':
+						if (!isDrawing) {
        isDrawing = true;
-       playerLinePoints = [ marker.position.clone() ];
+       currentDrawingDirection = 'none';
+       startSegmentIndex = playerSegmentIndex;
+       startSegmentProgress = playerSegmentProgress;
+       playerLinePoints = [marker.position.clone()];
        const material = new THREE.LineBasicMaterial({ color: 0xff00ff });
-       const geometry = new THREE.BufferGeometry().setFromPoints( playerLinePoints );
-       playerLine = new THREE.Line( geometry, material );
-       scene.add( playerLine );
+       const geometry = new THREE.BufferGeometry().setFromPoints(playerLinePoints);
+       playerLine = new THREE.Line(geometry, material);
+       scene.add(playerLine);
       }
-      break;
+						break;
 
-     case 'selectend':
-      if (isDrawing) {
+					case 'selectend':
+						if (isDrawing) {
        isDrawing = false;
-       if (playerLinePoints.length > 2) {
-        const drawnPath = new THREE.Path(playerLinePoints.map(p => new THREE.Vector2(p.x, p.y)));
-        gameAreaShape.holes.push(drawnPath);
-        const newFloorGeometry = new THREE.ShapeGeometry(gameAreaShape);
-        floor.geometry.dispose();
-        floor.geometry = newFloorGeometry;
-        scene.remove(playerLine);
-        playerLine = null;
-        playerLinePoints = [];
-       }
+       currentDrawingDirection = 'none';
+       scene.remove(playerLine);
+       playerLine = null;
+       playerLinePoints = [];
+
+       // Snap player back to where they started
+       playerSegmentIndex = startSegmentIndex;
+       playerSegmentProgress = startSegmentProgress;
+       const startPoint = perimeterPoints[playerSegmentIndex];
+       const endPoint = perimeterPoints[(playerSegmentIndex + 1) % perimeterPoints.length];
+       marker.position.lerpVectors(startPoint, endPoint, playerSegmentProgress);
       }
-      break;
+						break;
 
 					case 'move':
 						//controls.pointerHover( null );
@@ -299,6 +397,143 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
 				}
 
 			}
+   function handlePerimeterMovement(data) {
+    const d = (Math.abs(data[1].axes[2]) > Math.abs(data[2].axes[2])) ? data[1].axes[2] : data[2].axes[2];
+    if (Math.abs(d) > 0.1) {
+        const speed = d;
+        const progressChange = speed * 0.01;
+
+        playerSegmentProgress += progressChange;
+
+        if (playerSegmentProgress > 1.0) {
+            playerSegmentProgress -= 1.0;
+            playerSegmentIndex = (playerSegmentIndex + 1) % perimeterPoints.length;
+        } else if (playerSegmentProgress < 0.0) {
+            playerSegmentProgress += 1.0;
+            playerSegmentIndex = (playerSegmentIndex - 1 + perimeterPoints.length) % perimeterPoints.length;
+        }
+
+        const startPoint = perimeterPoints[playerSegmentIndex];
+        const endPoint = perimeterPoints[(playerSegmentIndex + 1) % perimeterPoints.length];
+        marker.position.lerpVectors(startPoint, endPoint, playerSegmentProgress);
+    }
+   }
+
+   function handleDrawingMovement(data) {
+    const c = (Math.abs(data[1].axes[3]) > Math.abs(data[2].axes[3])) ? data[1].axes[3] : data[2].axes[3]; // up-dn
+    const d = (Math.abs(data[1].axes[2]) > Math.abs(data[2].axes[2])) ? data[1].axes[2] : data[2].axes[2]; // lf-rt
+    const speed = 0.05;
+
+    if (currentDrawingDirection === 'none') {
+        if (Math.abs(d) > 0.5) {
+            currentDrawingDirection = 'horizontal';
+        } else if (Math.abs(c) > 0.5) {
+            currentDrawingDirection = 'vertical';
+        }
+    }
+
+    const lastPoint = playerLinePoints[playerLinePoints.length - 1];
+
+    if (currentDrawingDirection === 'horizontal') {
+        if (Math.abs(c) > 0.5) { // Change direction
+            playerLinePoints.push(lastPoint.clone());
+            currentDrawingDirection = 'vertical';
+        } else {
+            marker.position.x += Math.sign(d) * speed;
+        }
+    }
+
+    if (currentDrawingDirection === 'vertical') {
+        if (Math.abs(d) > 0.5) { // Change direction
+            playerLinePoints.push(lastPoint.clone());
+            currentDrawingDirection = 'horizontal';
+        } else {
+            marker.position.y -= Math.sign(c) * speed;
+        }
+    }
+
+    playerLine.geometry.setFromPoints([...playerLinePoints, marker.position]);
+
+
+    // Intersection Check
+    if (playerLinePoints.length > 0) {
+        const p1 = lastPoint;
+        const q1 = marker.position;
+
+        for (let i = 0; i < perimeterPoints.length; i++) {
+            const p2 = perimeterPoints[i];
+            const q2 = perimeterPoints[(i + 1) % perimeterPoints.length];
+
+            if (i === startSegmentIndex) continue;
+
+            const intersectionPoint = getIntersectionPoint(p1, q1, p2, q2);
+            if (intersectionPoint) {
+                playerLinePoints.push(intersectionPoint);
+                const endSegmentIndex = i;
+
+                // Build the two potential new perimeters by walking the old one
+                const poly1 = [...playerLinePoints];
+                let j = endSegmentIndex;
+                while (j !== startSegmentIndex) {
+                    poly1.push(perimeterPoints[j]);
+                    j = (j + 1) % perimeterPoints.length;
+                }
+                poly1.push(perimeterPoints[startSegmentIndex]);
+
+
+                const poly2 = [...playerLinePoints];
+                j = startSegmentIndex;
+                while (j !== endSegmentIndex) {
+                    poly2.push(perimeterPoints[j]);
+                    j = (j + 1) % perimeterPoints.length;
+                }
+                poly2.push(perimeterPoints[endSegmentIndex]);
+
+                const qixGeometry = qix[10].geometry.attributes.position;
+                const qixPoint = new THREE.Vector3(qixGeometry.getX(0), qixGeometry.getY(0), -5);
+
+                let newPerimeter;
+                if (pointInPolygon(qixPoint, poly1)) {
+                    newPerimeter = poly1;
+                } else {
+                    newPerimeter = poly2;
+                }
+
+                updateGameArea(newPerimeter);
+
+                isDrawing = false;
+                currentDrawingDirection = 'none';
+                scene.remove(playerLine);
+                playerLine = null;
+                playerLinePoints = [];
+
+                let closestPoint = null;
+                let closestDistSq = Infinity;
+                let newSegmentIndex = 0;
+                let newSegmentProgress = 0;
+                for (let k = 0; k < perimeterPoints.length; k++) {
+                    const p1_snap = perimeterPoints[k];
+                    const p2_snap = perimeterPoints[(k + 1) % perimeterPoints.length];
+                    const pointOnSegment = getClosestPointOnSegment(marker.position, p1_snap, p2_snap);
+                    const distSq = marker.position.distanceToSquared(pointOnSegment);
+                    if (distSq < closestDistSq) {
+                        closestDistSq = distSq;
+                        closestPoint = pointOnSegment;
+                        newSegmentIndex = k;
+                        const segmentLength = p1_snap.distanceTo(p2_snap);
+                        newSegmentProgress = (segmentLength > 0) ? closestPoint.distanceTo(p1_snap) / segmentLength : 0;
+                    }
+                }
+                marker.position.copy(closestPoint);
+                playerSegmentIndex = newSegmentIndex;
+                playerSegmentProgress = newSegmentProgress;
+
+                break;
+            }
+        }
+    }
+   }
+
  function animate() {
   const session = renderer.xr.getSession();
   if (session) {
@@ -317,62 +552,73 @@ body{padding:0;margin:0;overflow:hidden;background:black;}
       axes: source.gamepad.axes.slice(0)
      }
     }
-     //console.log(hand,data.buttons[4],data.buttons[5],data.axes[2]);
-     //console.log(data);
 
-      if (data[1]){
-       //up-dn
-       a=Math.abs(data[1].axes[3]);
-       b=Math.abs(data[2].axes[3]);
-       c=a>b?data[1].axes[3]:data[2].axes[3];
-       //lf-rt
-       a=Math.abs(data[1].axes[2]);
-       b=Math.abs(data[2].axes[2]);
-       d=a>b?data[1].axes[2]:data[2].axes[2];
-       //console.log(c,d);
-      }
-
-      if (Math.abs(c)>0 || Math.abs(d)>0) {
-       if (Math.abs(c)>Math.abs(d)) { //up-dn
-        marker.position.y-= c/50;
-       } else { //lf-rt
-        marker.position.x+= d/50;
-       }
-
-      if (marker.position.x>3.05){ marker.position.x=3.05; }
-      if (marker.position.y>4.05){ marker.position.y=4.05; }
-      if (marker.position.x<-3.05){ marker.position.x=-3.05; }
-      if (marker.position.y<-.05){ marker.position.y=-.05; }
-       if (isDrawing) {
-        const newPoint = marker.position.clone();
-        const lastPoint = playerLinePoints[playerLinePoints.length - 1];
-        if (newPoint.distanceTo(lastPoint) > 0.01) {
-         playerLinePoints.push(newPoint);
-         playerLine.geometry.setFromPoints(playerLinePoints);
+      if (data[1] && data[2]){
+        if (!isDrawing) {
+            handlePerimeterMovement(data);
+        } else {
+            handleDrawingMovement(data);
         }
-       }
       }
      }
-     /*
-     if (data[1].axes[3] || data[2].axes[3]){
-      a=data[1].axes[3]<0?data[1].axes[3]*-1:data[1].axes[3];
-      b=data[2].axes[3]<0?data[2].axes[3]*-1:data[2].axes[3];
-      c=a>b?data[1].axes[3]:data[2].axes[3];
-      console.log(a,b,c);
-      marker.position.y-= c/50;
-     }
-     if (data.axes[2]){
-      marker.position.x+=data.axes[2]/50;
-     }
-     if (data.buttons[4]){
-      //marker.position.x+=.01;
-    }    if (data.buttons[5]){
-      //marker.position.x-=.01;
-    }
+  // Qix animation logic
+  iii++;
+  if (iii > chc) {
+      iii = 0;
+      rbi++;
+      rbi = rbi > rb.length - 1 ? 0 : rbi;
+      tmp = x([rb[rbi][0], rb[rbi][1], rb[rbi][2]]);
+  } else {
+      tmp = [rgb[lines - 1][0], rgb[lines - 1][1], rgb[lines - 1][2]];
+  }
+  rgb.shift();
+  rgb.push(tmp);
 
-   }
+  for (let i = 0; i < lines; i++) {
+      if (i < lines - 1) {
+          for (let it = 0; it < 3; it++) {
+              if (rgb[i][it] == 0) { rgb[i][it] = 0; }
+              else if (rgb[i][it] < cvs[i + 1]) { rgb[i][it] = cvs[i] / 2; }
+              else { rgb[i][it] = cvs[i]; }
+          }
+      }
 
-  */
+      if (cd[i] == undefined && i > 0) {
+          cd.push([cd[i - 1][0] + step, cd[i - 1][1] + step, cd[i - 1][2] + step, cd[i - 1][3] + step]);
+      }
+      if (cd[i] == undefined && i == 0) {
+          cd.push([rand(9, ww - 9), rand(9, hh - 9), rand(9, ww - 9), rand(9, hh - 9)]);
+          vt = [rand("t"), rand("t"), rand("t"), rand("t")];
+      }
+      if (i == 0) {
+          if (cd[i][0] > 5 && cd[i][0] < ww - 5) { vt[0] = rand(0, 200) != 1 ? vt[0] : vt[0] * -1; }
+          if (cd[i][1] > 5 && cd[i][1] < hh - 5) { vt[1] = rand(0, 200) != 1 ? vt[1] : vt[1] * -1; }
+          if (cd[i][2] > 5 && cd[i][2] < ww - 5) { vt[2] = rand(0, 200) != 1 ? vt[2] : vt[2] * -1; }
+          if (cd[i][3] > 5 && cd[i][3] < hh - 5) { vt[3] = rand(0, 200) != 1 ? vt[3] : vt[3] * -1; }
+          if (cd[i][0] > ww) { vt[0] = -1; }
+          if (cd[i][0] < 0) { vt[0] = 1; }
+          if (cd[i][1] > hh) { vt[1] = -1; }
+          if (cd[i][1] < 0) { vt[1] = 1; }
+          if (cd[i][2] > ww) { vt[2] = -1; }
+          if (cd[i][2] < 0) { vt[2] = 1; }
+          if (cd[i][3] > hh) { vt[3] = -1; }
+          if (cd[i][3] < 0) { vt[3] = 1; }
+          cd.unshift([cd[i][0] + vt[0] * step, cd[i][1] + vt[1] * step, cd[i][2] + vt[2] * step, cd[i][3] * step]);
+          cd.pop();
+      }
+      if (cd[lines - i] != undefined && qix[i]) {
+          let r = rgb[i][0]; let g = rgb[i][1]; let b = rgb[i][2];
+          qix[i].material.color.r = r / 255;
+          qix[i].material.color.g = g / 255;
+          qix[i].material.color.b = b / 255;
+
+          qix[i].geometry.attributes.position.array[0] = trz(cd[lines - i][0], 1);
+          qix[i].geometry.attributes.position.array[1] = trz(cd[lines - i][1], 3);
+          qix[i].geometry.attributes.position.array[3] = trz(cd[lines - i][2], 1);
+          qix[i].geometry.attributes.position.array[4] = trz(cd[lines - i][3], 3);
+          qix[i].geometry.attributes.position.needsUpdate = true;
+      }
+  }
 
   renderer.render( scene, camera );
  }
@@ -410,9 +656,9 @@ function trz(n,d=1){
 var rb=["201","001","010","110","120","100"]; rbi=0;
 var mx,my,iii,nm=0,iii=999;
 var cd=[],rgb=[],cvs=[];
-//var can=document.getElementById("can");
-//var ctx=can.getContext("2d");
-//ctx.lineWidth=lw;
+var can=document.getElementById("can");
+var ctx=can.getContext("2d");
+ctx.lineWidth=lw;
 for (let i=0;i<lines;i++){
   nm+=Math.round(255/lines);
   cvs.push(nm);
@@ -420,11 +666,11 @@ for (let i=0;i<lines;i++){
 }
 window.onresize = function(event) { init(); };
 init();
-setInterval(frame,1000/fps);
+
 
 function init(){
- //can.width=window.innerWidth; can.height=window.innerHeight;
- //mx=can.width; my=can.height;
+ can.width=window.innerWidth; can.height=window.innerHeight;
+ mx=can.width; my=can.height;
 }
 
 function rand(lo,hi=1,st=0){
@@ -440,90 +686,6 @@ function x(x){
    else if (x[z]=="2") { out[z]=cvs[lines-1]/2 }
   }
   return out;
-}
-
-function frame(){
- iii++;
- if (iii>chc){
-  iii=0;
-  rbi++;
-  rbi= rbi>rb.length-1 ? 0 : rbi;
-
-  tmp=[ rb[rbi][0],rb[rbi][1],rb[rbi][2]] ;
-  tmp=x(tmp);
- } else {
-  tmp=[rgb[lines-1][0],rgb[lines-1][1],rgb[lines-1][2]];
- }
- rgb.shift();
- rgb.push(tmp);
-
- //ctx.fillStyle="#000000";
- //ctx.fillRect(0,0,mx,my);
- for (let i=0;i<lines;i++){
-
- if (i<lines-1){
-  for (let it=0;it<3;it++){
-   if (rgb[i][it]==0) { rgb[i][it]=0 }
-   else if (rgb[i][it]<cvs[i+1]) { rgb[i][it]=cvs[i]/2 }
-   else { rgb[i][it]=cvs[i] }
-  }
- }
-
-  if (cd[i]==undefined && i>0){
-   cd.push([cd[i-1][0]+step,cd[i-1][1]+step,cd[i-1][2]+step,cd[i-1][3]+step]);
-  }
-  if (cd[i]==undefined && i==0){
-   cd.push([rand(9,ww-9),rand(9,hh-9),rand(9,ww-9),rand(9,hh-9)]);
-   vt=[rand("t"),rand("t"),rand("t"),rand("t")];
-  }
-  if (i==0){
-   if (cd[i][0]>5 && cd[i][0]<ww-5){
-    vt[0]=rand(0,200)!=1 ? vt[0] : vt[0]*-1;
-   }
-   if (cd[i][1]>5 && cd[i][1]<hh-5){
-    vt[1]=rand(0,200)!=1 ? vt[1] : vt[1]*-1;
-   }
-   if (cd[i][2]>5 && cd[i][2]<ww-5){
-    vt[2]=rand(0,200)!=1 ? vt[2] : vt[2]*-1;
-   }
-   if (cd[i][3]>5 && cd[i][3]<hh-5){
-    vt[3]=rand(0,200)!=1 ? vt[3] : vt[3]*-1;
-   }
-   if(cd[i][0]>ww){ vt[0]=-1; }
-   if(cd[i][0]<0) { vt[0]=1; }
-   if(cd[i][1]>hh){ vt[1]=-1; }
-   if(cd[i][1]<0) { vt[1]=1; }
-   if(cd[i][2]>ww){ vt[2]=-1; }
-   if(cd[i][2]<0) { vt[2]=1; }
-   if(cd[i][3]>hh){ vt[3]=-1; }
-   if(cd[i][3]<0) { vt[3]=1; }
-   cd.unshift([cd[i][0]+vt[0]*step,cd[i][1]+vt[1]*step,cd[i][2]+vt[2]*step,cd[i][3]+vt[3]*step]);
-   cd.pop();
-  }
-  if (cd[lines-i]!=undefined){
-   r=rgb[i][0]; g=rgb[i][1]; b=rgb[i][2];
-   //ctx.strokeStyle="rgba("+r+","+g+","+b+",200)";
-   //ctx.beginPath(); ctx.moveTo(cd[lines-i][0],cd[lines-i][1]);
-   //ctx.lineTo(cd[lines-i][2],cd[lines-i][3]); ctx.stroke();
-
-
-   qix[i].material.color.r=r/255;
-   qix[i].material.color.g=g/255;
-   qix[i].material.color.b=b/255;
-
-   qix[i].geometry.attributes.position.array[0]=trz(cd[lines-i][0],1);
-   qix[i].geometry.attributes.position.array[1]=trz(cd[lines-i][1],3);
-   //qix[i].geometry.attributes.position.array[2]=trz((cd[lines-i][1])/3,1);
-   qix[i].geometry.attributes.position.array[3]=trz(cd[lines-i][2],1);
-   qix[i].geometry.attributes.position.array[4]=trz(cd[lines-i][3],3);
-   //qix[i].geometry.attributes.position.array[5]=trz((cd[lines-i][3])/3,1);
-   qix[i].geometry.attributes.position.needsUpdate = true;
-   
-   //console.log('cd',cd[i]);
-   //console.log('q1',qix[1].geometry.attributes.position.array[1]);
-   //console.log('q2',qix[i].geometry.attributes.position.array[1]);
-  }
- }
 }
 
 </script>
