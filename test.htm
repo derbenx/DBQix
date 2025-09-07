@@ -44,26 +44,20 @@
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Control: false };
         let isDrawing = false;
         let drawingDirection = null; // 'horizontal' or 'vertical'
+        let lastMove = { dx: 0, dy: 0 };
 
         // --- Drawing Functions ---
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw the main square
             ctx.fillStyle = 'blue';
             ctx.fillRect(squareX, squareY, squareSize, squareSize);
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2;
             ctx.strokeRect(squareX, squareY, squareSize, squareSize);
-
-            // Draw the new lines
             ctx.strokeStyle = 'yellow';
             ctx.lineWidth = 2;
             drawnPaths.forEach(path => drawLine(path));
             drawLine(currentDrawnPath);
-
-
-            // Draw the dot
             ctx.beginPath();
             ctx.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
             ctx.fillStyle = 'red';
@@ -72,21 +66,16 @@
 
         function drawLine(path) {
             if (path.length < 1) return;
-
             ctx.beginPath();
             ctx.moveTo(path[0][0], path[0][1]);
-
             for (let i = 1; i < path.length; i++) {
                 ctx.lineTo(path[i][0], path[i][1]);
             }
-
             if (isDrawing && path === currentDrawnPath) {
                 ctx.lineTo(dot.x, dot.y);
             }
-
             ctx.stroke();
         }
-
 
         // --- Collision & Path Functions ---
         function isOnBorder(px, py) {
@@ -94,46 +83,53 @@
             for (let i = 0; i < borderPath.length - 1; i++) {
                 const p1 = borderPath[i], p2 = borderPath[i + 1];
                 const x1 = p1[0], y1 = p1[1], x2 = p2[0], y2 = p2[1];
-                if (Math.abs(y1 - y2) < tolerance) { // Horizontal
+                if (Math.abs(y1 - y2) < tolerance) {
                     if (Math.abs(py - y1) < tolerance && px >= Math.min(x1, x2) - tolerance && px <= Math.max(x1, x2) + tolerance) return true;
-                } else if (Math.abs(x1 - x2) < tolerance) { // Vertical
+                } else if (Math.abs(x1 - x2) < tolerance) {
                     if (Math.abs(px - x1) < tolerance && py >= Math.min(y1, y2) - tolerance && py <= Math.max(y1, y2) + tolerance) return true;
                 }
             }
             return false;
         }
 
+        function segmentsIntersect(p1, p2, p3, p4) {
+            const isMoveVertical = p1.x === p2.x;
+            const isPathVertical = p3.x === p4.x;
+            if (isMoveVertical && !isPathVertical) { // Vertical move, Horizontal path
+                const isCrossingX = p1.x >= Math.min(p3.x, p4.x) && p1.x <= Math.max(p3.x, p4.x);
+                const isCrossingY = p3.y >= Math.min(p1.y, p2.y) && p3.y <= Math.max(p1.y, p2.y);
+                return isCrossingX && isCrossingY;
+            } else if (!isMoveVertical && isPathVertical) { // Horizontal move, Vertical path
+                const isCrossingX = p3.x >= Math.min(p1.x, p2.x) && p3.x <= Math.max(p1.x, p2.x);
+                const isCrossingY = p1.y >= Math.min(p3.y, p4.y) && p1.y <= Math.max(p3.y, p4.y);
+                return isCrossingX && isCrossingY;
+            }
+            return false;
+        }
+
         // --- Game Logic ---
         function update() {
-            if (isDrawing) {
-                updateDrawingMode();
-            } else {
-                updateBorderMode();
-            }
+            if (isDrawing) updateDrawingMode();
+            else updateBorderMode();
         }
 
         function updateBorderMode() {
-            // Check for leaving border
             if (keys.Control) {
-                let dx = 0, dy = 0;
-                let direction = null;
-
+                let dx = 0, dy = 0, direction = null;
                 if (keys.ArrowDown && dot.y === squareY) { dy = dot.speed; direction = 'vertical'; }
                 else if (keys.ArrowUp && dot.y === squareY + squareSize) { dy = -dot.speed; direction = 'vertical'; }
                 else if (keys.ArrowRight && dot.x === squareX) { dx = dot.speed; direction = 'horizontal'; }
                 else if (keys.ArrowLeft && dot.x === squareX + squareSize) { dx = -dot.speed; direction = 'horizontal'; }
-
                 if (direction) {
                     isDrawing = true;
                     drawingDirection = direction;
+                    lastMove = { dx, dy }; // Set initial move direction
                     currentDrawnPath.push([dot.x, dot.y]);
                     dot.x += dx;
                     dot.y += dy;
                     return;
                 }
             }
-
-            // Normal movement
             let moved = false;
             if (keys.ArrowUp && !moved && isOnBorder(dot.x, dot.y - dot.speed)) { dot.y -= dot.speed; moved = true; }
             if (keys.ArrowDown && !moved && isOnBorder(dot.x, dot.y + dot.speed)) { dot.y += dot.speed; moved = true; }
@@ -142,51 +138,44 @@
         }
 
         function updateDrawingMode() {
-            let dx = 0;
-            let dy = 0;
-
-            // Prioritize vertical movement (Up/Down) over horizontal (Left/Right).
+            let dx = 0, dy = 0;
             if (keys.ArrowUp) { dy = -dot.speed; }
             else if (keys.ArrowDown) { dy = dot.speed; }
             else if (keys.ArrowLeft) { dx = -dot.speed; }
             else if (keys.ArrowRight) { dx = dot.speed; }
+            if (dx === 0 && dy === 0) return;
 
-            // If there's no movement, do nothing.
-            if (dx === 0 && dy === 0) {
-                return;
+            if (dx === -lastMove.dx && dy === -lastMove.dy) return;
+
+            const moveFrom = { x: dot.x, y: dot.y };
+            const moveTo = { x: dot.x + dx, y: dot.y + dy };
+            if (currentDrawnPath.length >= 3) {
+                 // Check against all segments except the last one, which we are extending.
+                for (let i = 0; i < currentDrawnPath.length - 2; i++) {
+                    const p1 = { x: currentDrawnPath[i][0], y: currentDrawnPath[i][1] };
+                    const p2 = { x: currentDrawnPath[i+1][0], y: currentDrawnPath[i+1][1] };
+                    if (segmentsIntersect(moveFrom, moveTo, p1, p2)) return;
+                }
             }
 
-            // Determine the direction of this move.
             const newMovementDirection = (dx !== 0) ? 'horizontal' : 'vertical';
-
-            // If the direction changed, it's a turn, so save the corner.
-            // also check drawingDirection is not null, to avoid adding a point at the very start
             if (drawingDirection !== null && newMovementDirection !== drawingDirection) {
                 currentDrawnPath.push([dot.x, dot.y]);
             }
-
-            // Update the current drawing direction for the next frame.
             drawingDirection = newMovementDirection;
-
-            const newX = dot.x + dx;
-            const newY = dot.y + dy;
-
-            // Bounds check to stay within the blue square.
-            const buffer = 1; // Small buffer to prevent getting stuck on the edge
+            const newX = dot.x + dx, newY = dot.y + dy;
+            const buffer = 1;
             if (newX >= squareX + buffer && newX <= squareX + squareSize - buffer &&
                 newY >= squareY + buffer && newY <= squareY + squareSize - buffer) {
-
                 dot.x = newX;
                 dot.y = newY;
-
+                lastMove = { dx, dy };
             } else if (isOnBorder(newX, newY)) {
-                // Allow movement if it reconnects to the border
                 dot.x = newX;
                 dot.y = newY;
-
-                // Finalize the path
                 isDrawing = false;
                 drawingDirection = null;
+                lastMove = { dx: 0, dy: 0 };
                 currentDrawnPath.push([dot.x, dot.y]);
                 drawnPaths.push([...currentDrawnPath]);
                 currentDrawnPath = [];
@@ -199,11 +188,9 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // --- Event Listeners ---
         document.addEventListener('keydown', (event) => { if (event.key in keys) { keys[event.key] = true; event.preventDefault();} });
         document.addEventListener('keyup', (event) => { if (event.key in keys) { keys[event.key] = false; event.preventDefault();} });
 
-        // --- Start ---
         gameLoop();
     </script>
 </body>
