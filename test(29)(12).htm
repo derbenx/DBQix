@@ -47,6 +47,11 @@
         let lives = 10;
         let sparx = [];
 
+        // Invincibility
+        let isInvincible = false;
+        let invincibilityTimer = 0;
+        const invincibilityDuration = 30; // in frames, 30fps = 1sec
+
         function initGame() {
             const size = Math.min(window.innerWidth, window.innerHeight) * 0.75;
             canvas.width = size;
@@ -80,6 +85,9 @@
             isFuseActive = false;
             fusePosition = 0;
             idleTimer = 0;
+
+            isInvincible = false;
+            invincibilityTimer = 0;
 
             cd = [];
             initQix();
@@ -221,7 +229,21 @@
             });
         }
 
+        function updateInvincibility() {
+            if (isInvincible) {
+                invincibilityTimer--;
+                if (invincibilityTimer <= 0) {
+                    isInvincible = false;
+                }
+            }
+        }
+
         function handleCollision() {
+            if (isInvincible) return;
+
+            isInvincible = true;
+            invincibilityTimer = invincibilityDuration;
+
             lives--;
             updateLivesDisplay();
 
@@ -472,7 +494,7 @@
             if (dot.x) {
                 ctx.beginPath();
                 ctx.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
-                ctx.fillStyle = 'red';
+                ctx.fillStyle = isInvincible ? 'red' : 'green';
                 ctx.fill();
             }
             
@@ -672,6 +694,7 @@
 
             updateFuse();
             updateSparx();
+            updateInvincibility();
 
             if (frameCount % qixUpdateFrequency === 0) {
                 updateQix();
@@ -723,6 +746,10 @@
                     if (isPointInPolygon(testPoint, borderPath) && !isOnBorder(testPoint, borderPath)) {
                         isDrawing = true; dot.onBorder = false; drawingDirection = (dx !== 0) ? 'horizontal' : 'vertical';
                         lastMove = { dx, dy }; currentDrawnPath.push([dot.x, dot.y]);
+
+                        isInvincible = false;
+                        invincibilityTimer = 0;
+
                         dot.x += dx; dot.y += dy;
                     }
                 }
