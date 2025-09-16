@@ -35,6 +35,13 @@
         var vt;
         let frameCount = 0;
 
+        // Fuse variables
+        let isFuseActive = false;
+        let fusePosition = 0;
+        const fuseSpeed = 2; // Speed of the fuse in pixels per frame
+        let idleTimer = 0;
+        const idleThreshold = 30; // Frames of inactivity before fuse starts (1 sec at 30fps)
+
         function initGame() {
             const size = Math.min(window.innerWidth, window.innerHeight) * 0.75;
             canvas.width = size;
@@ -59,6 +66,10 @@
             currentDrawnPath = [];
             isDrawing = false;
             
+            isFuseActive = false;
+            fusePosition = 0;
+            idleTimer = 0;
+
             cd = [];
             initQix();
             updateScore();
@@ -78,7 +89,65 @@
             }
         }
 
+        function drawFuse() {
+            if (!isFuseActive || currentDrawnPath.length === 0) return;
+
+            let position = fusePosition;
+            let fusePoint = null;
+
+            const fullPath = [...currentDrawnPath, [dot.x, dot.y]];
+
+            for (let i = 0; i < fullPath.length - 1; i++) {
+                const p1 = fullPath[i];
+                const p2 = fullPath[i+1];
+                const segmentLength = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+
+                if (segmentLength > 0 && position <= segmentLength) {
+                    const ratio = position / segmentLength;
+                    fusePoint = [
+                        p1[0] + (p2[0] - p1[0]) * ratio,
+                        p1[1] + (p2[1] - p1[1]) * ratio
+                    ];
+                    break;
+                }
+                position -= segmentLength;
+            }
+
+            if (fusePoint) {
+                ctx.beginPath();
+                ctx.arc(fusePoint[0], fusePoint[1], 4, 0, Math.PI * 2);
+                ctx.fillStyle = 'red';
+                ctx.fill();
+            }
+        }
+
+        function updateFuse() {
+            if (!isFuseActive) return;
+
+            fusePosition += fuseSpeed;
+
+            let pathLength = 0;
+            if (currentDrawnPath.length > 0) {
+                for (let i = 0; i < currentDrawnPath.length - 1; i++) {
+                    const p1 = currentDrawnPath[i];
+                    const p2 = currentDrawnPath[i+1];
+                    pathLength += Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+                }
+                const lastPoint = currentDrawnPath[currentDrawnPath.length - 1];
+                pathLength += Math.hypot(dot.x - lastPoint[0], dot.y - lastPoint[1]);
+            }
+
+            if (pathLength > 0 && fusePosition >= pathLength) {
+                handleCollision();
+            }
+        }
+
         function handleCollision() {
+            // Reset fuse state on any collision
+            isFuseActive = false;
+            fusePosition = 0;
+            idleTimer = 0;
+
             if (currentDrawnPath.length > 0) {
                 const startPoint = currentDrawnPath[0];
                 dot.x = startPoint[0];
@@ -326,6 +395,7 @@
             }
             
             drawQix();
+            drawFuse();
         }
 
         function isPointOnSegment(p, a, b) {
@@ -512,6 +582,9 @@
             frameCount++;
             if (dot.onBorder) updateBorderMode();
             else if (isDrawing) updateDrawingMode();
+
+            updateFuse();
+
             if (frameCount % qixUpdateFrequency === 0) {
                 updateQix();
             }
@@ -574,7 +647,21 @@
             let dx = 0, dy = 0;
             if (keys.ArrowUp) { dy = -dot.speed; } else if (keys.ArrowDown) { dy = dot.speed; }
             else if (keys.ArrowLeft) { dx = -dot.speed; } else if (keys.ArrowRight) { dx = dot.speed; }
-            if (dx === 0 && dy === 0) return;
+
+            if (dx === 0 && dy === 0) {
+                // Player is idle, start the fuse timer
+                idleTimer++;
+                if (idleTimer > idleThreshold) {
+                    isFuseActive = true;
+                }
+                return; // No movement, so skip the rest
+            } else {
+                // Player is moving, reset fuse
+                idleTimer = 0;
+                isFuseActive = false;
+                fusePosition = 0;
+            }
+
             if (dx === -lastMove.dx && dy === -lastMove.dy) return;
             const moveFrom = { x: dot.x, y: dot.y }, moveTo = { x: dot.x + dx, y: dot.y + dy };
             if (currentDrawnPath.length >= 3) {
