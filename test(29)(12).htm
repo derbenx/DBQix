@@ -730,9 +730,18 @@
             borderPath = isPointInPolygon(qixMidpoint, polygon1) ? polygon1 : polygon2;
 
             sparx.forEach((s, i) => {
-                const newPos = findClosestPointOnPath(oldSparxPositions[i], borderPath);
-                s.edgeIndex = newPos.edgeIndex;
-                s.positionOnEdge = newPos.positionOnEdge;
+                const oldPos = oldSparxPositions[i];
+                if (!isOnBorder(oldPos, borderPath)) {
+                    // Was on a removed segment. Move to start of drawn line.
+                    const newPos = findClosestPointOnPath(startPoint, borderPath);
+                    s.edgeIndex = newPos.edgeIndex;
+                    s.positionOnEdge = newPos.positionOnEdge;
+                } else {
+                    // Still on the border. Snap to the closest point to maintain consistency.
+                    const newPos = findClosestPointOnPath(oldPos, borderPath);
+                    s.edgeIndex = newPos.edgeIndex;
+                    s.positionOnEdge = newPos.positionOnEdge;
+                }
             });
 
             currentDrawnPath = [];
