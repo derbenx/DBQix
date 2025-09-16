@@ -70,24 +70,32 @@
 
             lives = 10;
             sparx = [
-                { edgeIndex: 0, positionOnEdge: 0, speed: 2.5, dir: 1 },
-                { edgeIndex: 2, positionOnEdge: 0, speed: 2.5, dir: -1 }
+                { edgeIndex: 0, positionOnEdge: 0, speed: 1.25, dir: 1 },
+                { edgeIndex: 2, positionOnEdge: 0, speed: 1.25, dir: -1 }
             ];
 
+            const topEdgeStart = borderPath[0];
+            const topEdgeEnd = borderPath[1];
+            const topEdgeLength = topEdgeEnd[0] - topEdgeStart[0];
             dot = {
-                x: borderPath[0][0], y: borderPath[0][1], size: 5, speed: 4,
-                onBorder: true, currentEdgeIndex: 0, positionOnEdge: 0
+                x: topEdgeStart[0] + topEdgeLength / 2,
+                y: topEdgeStart[1],
+                size: 5,
+                speed: 4,
+                onBorder: true,
+                currentEdgeIndex: 0,
+                positionOnEdge: topEdgeLength / 2
             };
             
             currentDrawnPath = [];
             isDrawing = false;
-            
+
             isFuseActive = false;
             fusePosition = 0;
             idleTimer = 0;
 
-            isInvincible = false;
-            invincibilityTimer = 0;
+            isInvincible = true;
+            invincibilityTimer = Infinity; // Invincible until first move
 
             cd = [];
             initQix();
@@ -615,6 +623,56 @@
             return polygon;
         }
 
+        function getPointOnPath(edgeIndex, positionOnEdge, path) {
+            const edgeStart = path[edgeIndex];
+            const edgeEnd = path[(edgeIndex + 1) % path.length];
+            const edgeVec = [edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]];
+            const edgeLen = Math.hypot(edgeVec[0], edgeVec[1]);
+
+            if (edgeLen > 0) {
+                const unitVec = [edgeVec[0] / edgeLen, edgeVec[1] / edgeLen];
+                const x = edgeStart[0] + unitVec[0] * positionOnEdge;
+                const y = edgeStart[1] + unitVec[1] * positionOnEdge;
+                return [x, y];
+            } else {
+                return [edgeStart[0], edgeStart[1]];
+            }
+        }
+
+        function findClosestPointOnPath(point, path) {
+            let closestPointInfo = {
+                distance: Infinity,
+                edgeIndex: -1,
+                positionOnEdge: 0
+            };
+
+            for (let i = 0; i < path.length; i++) {
+                const p1 = path[i];
+                const p2 = path[(i + 1) % path.length];
+                const dx = p2[0] - p1[0];
+                const dy = p2[1] - p1[1];
+                const lenSq = dx * dx + dy * dy;
+
+                let t = 0;
+                if (lenSq !== 0) {
+                    t = ((point[0] - p1[0]) * dx + (point[1] - p1[1]) * dy) / lenSq;
+                    t = Math.max(0, Math.min(1, t));
+                }
+
+                const closestPointOnSegment = [p1[0] + t * dx, p1[1] + t * dy];
+                const distSq = (point[0] - closestPointOnSegment[0])**2 + (point[1] - closestPointOnSegment[1])**2;
+
+                if (distSq < closestPointInfo.distance) {
+                    closestPointInfo = {
+                        distance: distSq,
+                        edgeIndex: i,
+                        positionOnEdge: t * Math.sqrt(lenSq)
+                    };
+                }
+            }
+            return { edgeIndex: closestPointInfo.edgeIndex, positionOnEdge: closestPointInfo.positionOnEdge };
+        }
+
         function updateScore() {
             const currentArea = calculatePolygonArea(borderPath);
             const percentage = (currentArea / totalArea) * 100;
@@ -627,6 +685,9 @@
 
         function handleAreaCapture(path) {
             if (path.length < 2) return;
+
+            const oldSparxPositions = sparx.map(s => getPointOnPath(s.edgeIndex, s.positionOnEdge, borderPath));
+
             const startPoint = path[0];
             const endPoint = path[path.length - 1];
             let startEdgeIdx = findEdgeForPoint(startPoint, borderPath);
@@ -667,6 +728,13 @@
 
             const qixMidpoint = [(cd[0][0] + cd[0][2]) / 2, (cd[0][1] + cd[0][3]) / 2];
             borderPath = isPointInPolygon(qixMidpoint, polygon1) ? polygon1 : polygon2;
+
+            sparx.forEach((s, i) => {
+                const newPos = findClosestPointOnPath(oldSparxPositions[i], borderPath);
+                s.edgeIndex = newPos.edgeIndex;
+                s.positionOnEdge = newPos.positionOnEdge;
+            });
+
             currentDrawnPath = [];
             updateScore();
 
@@ -718,6 +786,12 @@
                 if (edgeVector[1] > 0) { if(keys.ArrowDown) move = dot.speed; if(keys.ArrowUp) move = -dot.speed; }
                 else { if(keys.ArrowUp) move = dot.speed; if(keys.ArrowDown) move = -dot.speed; }
             }
+
+            if (move !== 0 && invincibilityTimer === Infinity) {
+                isInvincible = false;
+                invincibilityTimer = 0;
+            }
+
             dot.positionOnEdge += move;
             if (edgeLength > 0 && dot.positionOnEdge > edgeLength) {
                 dot.currentEdgeIndex = (dot.currentEdgeIndex + 1) % borderPath.length;
