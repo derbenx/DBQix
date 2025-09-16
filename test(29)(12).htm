@@ -865,13 +865,39 @@
                 currentDrawnPath.push([dot.x, dot.y]);
             }
             drawingDirection = newMovementDirection;
-            const newPoint = [dot.x + dx, dot.y + dy];
-            if (isOnBorder(newPoint, borderPath)) {
-                dot.x = newPoint[0]; dot.y = newPoint[1]; isDrawing = false; dot.onBorder = true;
-                lastMove = { dx: 0, dy: 0 }; currentDrawnPath.push([dot.x, dot.y]);
-                handleAreaCapture(currentDrawnPath);
-            } else if (isPointInPolygon(newPoint, borderPath)) {
-                dot.x = newPoint[0]; dot.y = newPoint[1]; lastMove = { dx, dy };
+
+            const p1 = [dot.x, dot.y];
+            const p2 = [dot.x + dx, dot.y + dy];
+            let hasHitBorder = false;
+
+            for (let i = 0; i < borderPath.length; i++) {
+                const b1 = borderPath[i];
+                const b2 = borderPath[(i + 1) % borderPath.length];
+                if (lineSegmentsIntersect(p1, p2, b1, b2)) {
+                    // Snap to border
+                    if (dx !== 0) { // Horizontal move, hits vertical border
+                        dot.x = b1[0];
+                    } else { // Vertical move, hits horizontal border
+                        dot.y = b1[1];
+                    }
+
+                    isDrawing = false;
+                    dot.onBorder = true;
+                    lastMove = { dx: 0, dy: 0 };
+                    currentDrawnPath.push([dot.x, dot.y]);
+                    handleAreaCapture(currentDrawnPath);
+                    hasHitBorder = true;
+                    break;
+                }
+            }
+
+            if (!hasHitBorder) {
+                // Only move if the destination is inside the polygon
+                if (isPointInPolygon(p2, borderPath)) {
+                    dot.x = p2[0];
+                    dot.y = p2[1];
+                    lastMove = { dx, dy };
+                }
             }
         }
 
