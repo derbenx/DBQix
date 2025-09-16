@@ -10,6 +10,7 @@
 <body>
     <canvas id="myCanvas"></canvas>
     <div id="score" style="position: absolute; top: 10px; left: 10px; font-size: 24px; color: #333;"></div>
+    <div id="lives" style="position: absolute; top: 40px; left: 10px; font-size: 24px; color: #333;"></div>
     <script>
         const canvas = document.getElementById('myCanvas');
         const ctx = canvas.getContext('2d');
@@ -42,6 +43,10 @@
         let idleTimer = 0;
         const idleThreshold = 30; // Frames of inactivity before fuse starts (1 sec at 30fps)
 
+        // Lives and Sparx
+        let lives = 10;
+        let sparx = [];
+
         function initGame() {
             const size = Math.min(window.innerWidth, window.innerHeight) * 0.75;
             canvas.width = size;
@@ -58,6 +63,12 @@
             originalBorderPath = [...borderPath];
             totalArea = calculatePolygonArea(originalBorderPath);
 
+            lives = 10;
+            sparx = [
+                { edgeIndex: 0, positionOnEdge: 0, speed: 2.5, dir: 1 },
+                { edgeIndex: 2, positionOnEdge: 0, speed: 2.5, dir: -1 }
+            ];
+
             dot = {
                 x: borderPath[0][0], y: borderPath[0][1], size: 5, speed: 4,
                 onBorder: true, currentEdgeIndex: 0, positionOnEdge: 0
@@ -73,6 +84,7 @@
             cd = [];
             initQix();
             updateScore();
+            updateLivesDisplay();
         }
 
         function initQix() {
@@ -121,6 +133,32 @@
             }
         }
 
+        function drawSparx() {
+            if (lives <= 0) return;
+
+            sparx.forEach(s => {
+                const edgeStart = borderPath[s.edgeIndex];
+                const edgeEnd = borderPath[(s.edgeIndex + 1) % borderPath.length];
+                const edgeVec = [edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]];
+                const edgeLen = Math.hypot(edgeVec[0], edgeVec[1]);
+
+                let x, y;
+                if (edgeLen > 0) {
+                    const unitVec = [edgeVec[0] / edgeLen, edgeVec[1] / edgeLen];
+                    x = edgeStart[0] + unitVec[0] * s.positionOnEdge;
+                    y = edgeStart[1] + unitVec[1] * s.positionOnEdge;
+                } else {
+                    x = edgeStart[0];
+                    y = edgeStart[1];
+                }
+
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = 'blue';
+                ctx.fill();
+            });
+        }
+
         function updateFuse() {
             if (!isFuseActive) return;
 
@@ -142,7 +180,51 @@
             }
         }
 
+        function updateSparx() {
+            if (lives <= 0) return;
+
+            sparx.forEach(s => {
+                s.positionOnEdge += s.speed * s.dir;
+
+                while (true) {
+                    let edgeStart = borderPath[s.edgeIndex];
+                    let edgeEnd = borderPath[(s.edgeIndex + 1) % borderPath.length];
+                    const edgeLength = Math.hypot(edgeEnd[0] - edgeStart[0], edgeEnd[1] - edgeStart[1]);
+
+                    if (s.dir > 0) { // Clockwise
+                        if (s.positionOnEdge >= edgeLength) {
+                            s.positionOnEdge -= edgeLength;
+                            s.edgeIndex = (s.edgeIndex + 1) % borderPath.length;
+                        } else {
+                            break;
+                        }
+                    } else { // Counter-clockwise
+                        if (s.positionOnEdge < 0) {
+                            s.edgeIndex = (s.edgeIndex - 1 + borderPath.length) % borderPath.length;
+                            const prevEdgeLength = Math.hypot(
+                                borderPath[(s.edgeIndex + 1) % borderPath.length][0] - borderPath[s.edgeIndex][0],
+                                borderPath[(s.edgeIndex + 1) % borderPath.length][1] - borderPath[s.edgeIndex][1]
+                            );
+                            s.positionOnEdge += prevEdgeLength;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                // Collision with player dot
+                if (dot.onBorder && s.edgeIndex === dot.currentEdgeIndex) {
+                    if (Math.abs(s.positionOnEdge - dot.positionOnEdge) < dot.size) {
+                        handleCollision();
+                    }
+                }
+            });
+        }
+
         function handleCollision() {
+            lives--;
+            updateLivesDisplay();
+
             // Reset fuse state on any collision
             isFuseActive = false;
             fusePosition = 0;
@@ -396,6 +478,7 @@
             
             drawQix();
             drawFuse();
+            drawSparx();
         }
 
         function isPointOnSegment(p, a, b) {
@@ -516,6 +599,10 @@
             document.getElementById('score').innerText = `Area Left: ${percentage.toFixed(2)}%`;
         }
 
+        function updateLivesDisplay() {
+            document.getElementById('lives').innerText = `Lives: ${lives}`;
+        }
+
         function handleAreaCapture(path) {
             if (path.length < 2) return;
             const startPoint = path[0];
@@ -584,6 +671,7 @@
             else if (isDrawing) updateDrawingMode();
 
             updateFuse();
+            updateSparx();
 
             if (frameCount % qixUpdateFrequency === 0) {
                 updateQix();
@@ -591,6 +679,7 @@
         }
 
         function updateBorderMode() {
+            if (lives <= 0) return;
             if (!dot.onBorder) return;
             const edgeIndex = dot.currentEdgeIndex;
             if (edgeIndex === -1 || edgeIndex >= borderPath.length) { dot.currentEdgeIndex = 0; return; }
@@ -641,6 +730,7 @@
         }
 
         function updateDrawingMode() {
+            if (lives <= 0) return;
             checkCollisions();
             if (!isDrawing) return; // Collision might have occurred
 
