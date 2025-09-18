@@ -780,6 +780,11 @@
             container3d.appendChild(renderer.domElement);
             document.body.appendChild(VRButton.createButton(renderer));
 
+            renderer.xr.addEventListener('sessionend', () => {
+                // Ensure the camera and renderer are resized correctly for the desktop view.
+                setTimeout(() => onWindowResize(), 100);
+            });
+
             const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
             light.position.set(0, 4, 0);
             scene.add(light);
