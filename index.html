@@ -4,7 +4,15 @@
     <title>QixVR</title>
     <style>
         body { margin: 0; }
-        canvas { display: block; }
+        #container {
+            display: flex;
+        }
+        #myCanvas {
+            border: 1px solid #ccc;
+        }
+        #vr-canvas-container {
+            border: 1px solid #ccc;
+        }
         #info {
             position: absolute;
             bottom: 10px;
@@ -25,8 +33,11 @@
     </script>
 </head>
 <body>
+    <div id="container">
+        <canvas id="myCanvas"></canvas>
+        <div id="vr-canvas-container"></div>
+    </div>
     <div id="info">v1.0.1</div>
-    <canvas id="myCanvas"></canvas>
     <div id="score" style="position: absolute; top: 10px; left: 10px; font-size: 24px; color: #333;"></div>
     <div id="lives" style="position: absolute; top: 40px; left: 10px; font-size: 24px; color: #333;"></div>
     <script type="module">
@@ -39,24 +50,32 @@
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
-        let camera, scene, renderer, textMesh;
+        let camera, scene, renderer;
 
         init();
         animate();
 
         function init() {
-            const container = document.createElement('div');
-            document.body.appendChild(container);
+            const container = document.getElementById('vr-canvas-container');
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x505050);
 
-            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 10);
+            // Add lighting
+            const light = new THREE.HemisphereLight( 0xffffff, 0x444444 );
+            light.position.set( 0, 20, 0 );
+            scene.add( light );
+            const directionalLight = new THREE.DirectionalLight( 0xffffff );
+            directionalLight.position.set( 0, 20, 10 );
+            scene.add( directionalLight );
+
+
+            camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10);
             camera.position.set(0, 1.6, 3);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(512, 512);
             renderer.xr.enabled = true;
             container.appendChild(renderer.domElement);
 
@@ -81,16 +100,6 @@
             controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
             scene.add(controllerGrip2);
 
-            // Line for controllers
-            const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, - 1)]);
-
-            const line = new THREE.Line(geometry);
-            line.name = 'line';
-            line.scale.z = 5;
-
-            controller1.add(line.clone());
-            controller2.add(line.clone());
-
             // Game board
             const boardGeometry = new THREE.PlaneGeometry(4, 4);
             const boardMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
@@ -99,16 +108,16 @@
             scene.add(board);
 
             const loader = new FontLoader();
-            loader.load('./three/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+            loader.load('https://cdn.jsdelivr.net/npm/three/examples/fonts/helvetiker_regular.typeface.json', function (font) {
                 const textGeometry = new TextGeometry("v" + ver, {
                     font: font,
                     size: 0.1,
                     height: 0.01,
                 });
                 const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
                 camera.add(textMesh);
-                textMesh.position.set(-0.2, -0.5, -2);
+                textMesh.position.set(-0.2, -0.5, -1);
             });
 
             scene.add(camera);
@@ -117,9 +126,9 @@
         }
 
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.aspect = 1;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(512, 512);
         }
 
         function animate() {
@@ -172,7 +181,7 @@
         const invincibilityDuration = 30; // in frames, 30fps = 1sec
 
         function initGame() {
-            const size = Math.min(window.innerWidth, window.innerHeight) * 0.75;
+            const size = 512;
             canvas.width = size;
             canvas.height = size;
 
