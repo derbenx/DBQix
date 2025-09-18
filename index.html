@@ -814,36 +814,52 @@
                 inputState.moveY = 0;
                 inputState.draw = false;
 
-                // Use left controller (controller1) for movement
-                if (controller1 && controller1.gamepad) {
-                    // XR Standard Gamepad mapping: axes[2] is x, axes[3] is y for thumbstick
-                    const stickX = controller1.gamepad.axes[2] || 0;
-                    const stickY = controller1.gamepad.axes[3] || 0;
-                    const deadzone = 0.2;
+                // Use either controller's joystick for movement
+                let stickX1 = 0, stickY1 = 0, stickX2 = 0, stickY2 = 0;
+                const deadzone = 0.2;
 
-                    if (Math.hypot(stickX, stickY) > deadzone) {
-                        inputState.moveX = stickX;
-                        inputState.moveY = stickY;
+                if (controller1 && controller1.gamepad && controller1.gamepad.axes.length >= 4) {
+                    stickX1 = controller1.gamepad.axes[2];
+                    stickY1 = controller1.gamepad.axes[3];
+                }
+                if (controller2 && controller2.gamepad && controller2.gamepad.axes.length >= 4) {
+                    stickX2 = controller2.gamepad.axes[2];
+                    stickY2 = controller2.gamepad.axes[3];
+                }
+
+                const mag1 = Math.hypot(stickX1, stickY1);
+                const mag2 = Math.hypot(stickX2, stickY2);
+
+                if (mag1 > deadzone || mag2 > deadzone) {
+                    if (mag1 > mag2) {
+                        inputState.moveX = stickX1;
+                        inputState.moveY = stickY1;
+                    } else {
+                        inputState.moveX = stickX2;
+                        inputState.moveY = stickY2;
                     }
                 }
 
-                // Use A/X button (button 4) on either controller for drawing
+                // Use Trigger (button 0) or A/X button (button 4) on either controller for drawing
+                const trigger1 = controller1 && controller1.gamepad && controller1.gamepad.buttons[0] && controller1.gamepad.buttons[0].pressed;
+                const trigger2 = controller2 && controller2.gamepad && controller2.gamepad.buttons[0] && controller2.gamepad.buttons[0].pressed;
                 const aButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons[4] && controller1.gamepad.buttons[4].pressed;
                 const aButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons[4] && controller2.gamepad.buttons[4].pressed;
-                if (aButton1 || aButton2) {
+                if (trigger1 || trigger2 || aButton1 || aButton2) {
                     inputState.draw = true;
                 }
 
-                // Use B/Y button (button 5) on right controller (controller2) to exit VR
-                if (controller2 && controller2.gamepad) {
-                    const bButtonPressed = controller2.gamepad.buttons[5] && controller2.gamepad.buttons[5].pressed;
-                    if (bButtonPressed && !bButtonWasPressed) {
-                        session.end();
-                        bButtonWasPressed = false; // Reset state after exiting
-                        return; // Stop processing further input for this frame
-                    }
-                    bButtonWasPressed = bButtonPressed;
+                // Use B/Y button (button 5) on either controller to exit VR
+                const bButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons[5] && controller1.gamepad.buttons[5].pressed;
+                const bButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons[5] && controller2.gamepad.buttons[5].pressed;
+                const bButtonPressed = bButton1 || bButton2;
+
+                if (bButtonPressed && !bButtonWasPressed) {
+                    session.end();
+                    bButtonWasPressed = false; // Reset state after exiting
+                    return; // Stop processing further input for this frame
                 }
+                bButtonWasPressed = bButtonPressed;
 
             } else {
                 // --- Keyboard Input ---
