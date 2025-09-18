@@ -789,9 +789,19 @@
                 const cameraRig = renderer.xr.getCamera(camera);
                 cameraRig.position.set(0, 0, 0);
 
-                // Ensure the camera and renderer are resized correctly for the desktop view.
-                // The timeout gives the browser a moment to handle the session end event.
-                setTimeout(() => onWindowResize(), 100);
+                // Manually handle resizing of the 3D canvas without re-initializing the game
+                const container3d = document.getElementById('canvas-3d-container');
+                if (container3d.clientWidth > 0 && container3d.clientHeight > 0) {
+                    camera.aspect = container3d.clientWidth / container3d.clientHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+                }
+
+                // Ensure the 2D UI is visible again
+                document.getElementById('main-container').style.display = 'flex';
+                document.getElementById('score').style.display = 'block';
+                document.getElementById('lives').style.display = 'block';
+                document.getElementById('version').style.display = 'block';
             });
 
             const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
@@ -964,9 +974,12 @@
                 const bButtonPressed = bButton1 || bButton2;
 
                 if (bButtonPressed && !bButtonWasPressed) {
-                    session.end();
-                    bButtonWasPressed = false; // Reset state after exiting
-                    return; // Stop processing further input for this frame
+                    const vrButton = document.getElementById('VRButton');
+                    if (vrButton && vrButton.textContent.includes('EXIT')) {
+                        vrButton.click();
+                    }
+                    bButtonWasPressed = false;
+                    return;
                 }
                 bButtonWasPressed = bButtonPressed;
 
