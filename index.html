@@ -781,7 +781,16 @@
             document.body.appendChild(VRButton.createButton(renderer));
 
             renderer.xr.addEventListener('sessionend', () => {
+                // Reset camera to a good default desktop position
+                camera.position.set(0, 1.6, 0.5);
+                camera.rotation.set(0, 0, 0); // Look straight ahead
+
+                // It's good practice to also reset the camera's "rig" or parent container
+                const cameraRig = renderer.xr.getCamera(camera);
+                cameraRig.position.set(0, 0, 0);
+
                 // Ensure the camera and renderer are resized correctly for the desktop view.
+                // The timeout gives the browser a moment to handle the session end event.
                 setTimeout(() => onWindowResize(), 100);
             });
 
