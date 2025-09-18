@@ -3,15 +3,24 @@
 <head>
     <title>QixVR</title>
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #333; }
-        canvas#myCanvas { border: 1px solid #ccc; }
-        #score { position: absolute; top: 10px; left: 10px; font-size: 24px; color: white; font-family: monospace; }
-        #lives { position: absolute; top: 40px; left: 10px; font-size: 24px; color: white; font-family: monospace; }
-        #version { position: absolute; bottom: 10px; right: 10px; color: white; font-family: monospace; }
+        body { margin: 0; background-color: #333; color: white; font-family: monospace; overflow: hidden; }
+        #main-container { display: flex; width: 100vw; height: 100vh; }
+        .canvas-container { width: 50%; height: 100%; position: relative; display: flex; justify-content: center; align-items: center; }
+        canvas { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+        #score { position: absolute; top: 10px; left: 10px; font-size: 24px; }
+        #lives { position: absolute; top: 40px; left: 10px; font-size: 24px; }
+        #version { position: absolute; bottom: 10px; right: 10px; }
     </style>
 </head>
 <body>
-    <canvas id="myCanvas"></canvas>
+    <div id="main-container">
+        <div id="canvas-2d-container" class="canvas-container">
+            <canvas id="myCanvas"></canvas>
+        </div>
+        <div id="canvas-3d-container" class="canvas-container">
+             <!-- 3D canvas will be appended here by JS -->
+        </div>
+    </div>
     <div id="score"></div>
     <div id="lives"></div>
     <div id="version"></div>
@@ -35,12 +44,13 @@
         // --- Shared State ---
         let lives = 10;
         let score = 0;
-        const ver = "1.0.2";
+        const ver = "1.1.0";
 
         // --- Input State ---
         const inputState = { moveX: 0, moveY: 0, draw: false };
         const keyState = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Control: false };
         let bButtonWasPressed = false;
+        let triggerPressed = [false, false];
 
         // --- Canvas and Context ---
         const canvas = document.getElementById('myCanvas');
@@ -75,11 +85,12 @@
         const invincibilityDuration = 30;
 
         function initGame() {
-            const size = Math.min(window.innerWidth, window.innerHeight) * 0.75;
+            const container = document.getElementById('canvas-2d-container');
+            const size = Math.min(container.clientWidth, container.clientHeight) * 0.95;
             canvas.width = size;
             canvas.height = size;
 
-            const boardSize = canvas.width * 0.75;
+            const boardSize = size * 0.75;
             const margin = (canvas.width - boardSize) / 2;
             borderPath = [
                 [margin, margin],
@@ -730,10 +741,11 @@
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1.6, 0.5);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: document.createElement('canvas') });
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            const container3d = document.getElementById('canvas-3d-container');
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container3d.clientWidth, container3d.clientHeight);
             renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
+            container3d.appendChild(renderer.domElement);
             document.body.appendChild(VRButton.createButton(renderer));
 
             const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
@@ -753,6 +765,14 @@
             let controllerGrip2 = renderer.xr.getControllerGrip(1);
             controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
             scene.add(controllerGrip2);
+
+            controller1.addEventListener('connected', function (event) { this.gamepad = event.data.gamepad; });
+            controller1.addEventListener('selectstart', () => { triggerPressed[0] = true; });
+            controller1.addEventListener('selectend', () => { triggerPressed[0] = false; });
+
+            controller2.addEventListener('connected', function (event) { this.gamepad = event.data.gamepad; });
+            controller2.addEventListener('selectstart', () => { triggerPressed[1] = true; });
+            controller2.addEventListener('selectend', () => { triggerPressed[1] = false; });
 
             const boardGeometry = new THREE.PlaneGeometry(1, 1);
             const boardMaterial = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), side: THREE.DoubleSide });
@@ -798,10 +818,16 @@
         }
 
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            initGame();
+            // 2D Canvas
+            initGame(); // Re-initialize game logic with new size
+
+            // 3D Canvas
+            const container3d = document.getElementById('canvas-3d-container');
+            if (container3d.clientWidth > 0 && container3d.clientHeight > 0) {
+                camera.aspect = container3d.clientWidth / container3d.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+            }
         }
 
         function handleInputs() {
@@ -840,35 +866,26 @@
                     }
                 }
 
-                // Use Trigger (button 0) or A/X button (button 4) on either controller for drawing
-                let drawPressed = false;
-                if (controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 4) {
-                    drawPressed = drawPressed || (controller1.gamepad.buttons[0] && controller1.gamepad.buttons[0].pressed);
-                    drawPressed = drawPressed || (controller1.gamepad.buttons[4] && controller1.gamepad.buttons[4].pressed);
-                }
-                if (controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 4) {
-                    drawPressed = drawPressed || (controller2.gamepad.buttons[0] && controller2.gamepad.buttons[0].pressed);
-                    drawPressed = drawPressed || (controller2.gamepad.buttons[4] && controller2.gamepad.buttons[4].pressed);
-                }
-                if (drawPressed) {
-                    inputState.draw = true;
-                }
+                // Use Trigger or A/X button for drawing
+                if (controller1.gamepad || controller2.gamepad) {
+                    const aButton1 = controller1.gamepad && controller1.gamepad.buttons.length > 4 && controller1.gamepad.buttons[4].pressed;
+                    const aButton2 = controller2.gamepad && controller2.gamepad.buttons.length > 4 && controller2.gamepad.buttons[4].pressed;
+                    if (triggerPressed[0] || triggerPressed[1] || aButton1 || aButton2) {
+                        inputState.draw = true;
+                    }
 
-                // Use B/Y button (button 5) on either controller to exit VR
-                let bButtonPressed = false;
-                if (controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 5) {
-                    bButtonPressed = bButtonPressed || (controller1.gamepad.buttons[5] && controller1.gamepad.buttons[5].pressed);
-                }
-                if (controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 5) {
-                    bButtonPressed = bButtonPressed || (controller2.gamepad.buttons[5] && controller2.gamepad.buttons[5].pressed);
-                }
+                    // Use B/Y button to exit VR
+                    const bButton1 = controller1.gamepad && controller1.gamepad.buttons.length > 5 && controller1.gamepad.buttons[5].pressed;
+                    const bButton2 = controller2.gamepad && controller2.gamepad.buttons.length > 5 && controller2.gamepad.buttons[5].pressed;
+                    const bButtonPressed = bButton1 || bButton2;
 
-                if (bButtonPressed && !bButtonWasPressed) {
-                    session.end();
-                    bButtonWasPressed = false; // Reset state after exiting
-                    return; // Stop processing further input for this frame
+                    if (bButtonPressed && !bButtonWasPressed) {
+                        session.end();
+                        bButtonWasPressed = false; // Reset state after exiting
+                        return; // Stop processing further input for this frame
+                    }
+                    bButtonWasPressed = bButtonPressed;
                 }
-                bButtonWasPressed = bButtonPressed;
 
             } else {
                 // --- Keyboard Input ---
@@ -894,13 +911,14 @@
 
                 handleInputs();
 
+                const mainContainer = document.getElementById('main-container');
                 if (isPresenting) {
-                    canvas.style.display = 'none';
+                    mainContainer.style.display = 'none';
                     document.getElementById('score').style.display = 'none';
                     document.getElementById('lives').style.display = 'none';
                     document.getElementById('version').style.display = 'none';
                 } else {
-                    canvas.style.display = 'block';
+                    mainContainer.style.display = 'flex';
                     document.getElementById('score').style.display = 'block';
                     document.getElementById('lives').style.display = 'block';
                     document.getElementById('version').style.display = 'block';
