@@ -841,18 +841,27 @@
                 }
 
                 // Use Trigger (button 0) or A/X button (button 4) on either controller for drawing
-                const trigger1 = controller1 && controller1.gamepad && controller1.gamepad.buttons[0] && controller1.gamepad.buttons[0].pressed;
-                const trigger2 = controller2 && controller2.gamepad && controller2.gamepad.buttons[0] && controller2.gamepad.buttons[0].pressed;
-                const aButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons[4] && controller1.gamepad.buttons[4].pressed;
-                const aButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons[4] && controller2.gamepad.buttons[4].pressed;
-                if (trigger1 || trigger2 || aButton1 || aButton2) {
+                let drawPressed = false;
+                if (controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 4) {
+                    drawPressed = drawPressed || (controller1.gamepad.buttons[0] && controller1.gamepad.buttons[0].pressed);
+                    drawPressed = drawPressed || (controller1.gamepad.buttons[4] && controller1.gamepad.buttons[4].pressed);
+                }
+                if (controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 4) {
+                    drawPressed = drawPressed || (controller2.gamepad.buttons[0] && controller2.gamepad.buttons[0].pressed);
+                    drawPressed = drawPressed || (controller2.gamepad.buttons[4] && controller2.gamepad.buttons[4].pressed);
+                }
+                if (drawPressed) {
                     inputState.draw = true;
                 }
 
                 // Use B/Y button (button 5) on either controller to exit VR
-                const bButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons[5] && controller1.gamepad.buttons[5].pressed;
-                const bButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons[5] && controller2.gamepad.buttons[5].pressed;
-                const bButtonPressed = bButton1 || bButton2;
+                let bButtonPressed = false;
+                if (controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 5) {
+                    bButtonPressed = bButtonPressed || (controller1.gamepad.buttons[5] && controller1.gamepad.buttons[5].pressed);
+                }
+                if (controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 5) {
+                    bButtonPressed = bButtonPressed || (controller2.gamepad.buttons[5] && controller2.gamepad.buttons[5].pressed);
+                }
 
                 if (bButtonPressed && !bButtonWasPressed) {
                     session.end();
