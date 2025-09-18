@@ -25,7 +25,7 @@
     </script>
 </head>
 <body>
-    <div id="info">QixVR</div>
+    <div id="info">v1.0.1</div>
     <canvas id="myCanvas"></canvas>
     <div id="score" style="position: absolute; top: 10px; left: 10px; font-size: 24px; color: #333;"></div>
     <div id="lives" style="position: absolute; top: 40px; left: 10px; font-size: 24px; color: #333;"></div>
@@ -39,7 +39,7 @@
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
-        let camera, scene, renderer;
+        let camera, scene, renderer, textMesh;
 
         init();
         animate();
@@ -99,21 +99,21 @@
             scene.add(board);
 
             const loader = new FontLoader();
-            loader.load('https://unpkg.com/three@0.77.0/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+            loader.load('./three/examples/fonts/helvetiker_regular.typeface.json', function (font) {
                 const textGeometry = new TextGeometry("v" + ver, {
                     font: font,
                     size: 0.1,
                     height: 0.01,
                 });
                 const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-                textMesh.position.set(-1.9, 0.2, -2);
-                scene.add(textMesh);
+                textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                camera.add(textMesh);
+                textMesh.position.set(-0.2, -0.5, -2);
             });
 
-            window.addEventListener('resize', onWindowResize);
+            scene.add(camera);
 
-            document.getElementById("info").innerText = "v" + ver;
+            window.addEventListener('resize', onWindowResize);
         }
 
         function onWindowResize() {
