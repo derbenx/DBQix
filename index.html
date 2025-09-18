@@ -53,6 +53,7 @@
         let triggerPressed = [false, false];
         let isGameOver = false;
         let restartWasPressed = false;
+        let gameOverScreenRendered = false;
 
         // --- Canvas and Context ---
         const canvas = document.getElementById('myCanvas');
@@ -799,10 +800,12 @@
             scene.add(controllerGrip2);
 
             controller1.addEventListener('connected', function (event) { this.gamepad = event.data.gamepad; });
+            controller1.addEventListener('disconnected', function () { this.gamepad = null; });
             controller1.addEventListener('selectstart', () => { triggerPressed[0] = true; });
             controller1.addEventListener('selectend', () => { triggerPressed[0] = false; });
 
             controller2.addEventListener('connected', function (event) { this.gamepad = event.data.gamepad; });
+            controller2.addEventListener('disconnected', function () { this.gamepad = null; });
             controller2.addEventListener('selectstart', () => { triggerPressed[1] = true; });
             controller2.addEventListener('selectend', () => { triggerPressed[1] = false; });
 
@@ -872,10 +875,11 @@
         function handleInputs() {
             if (isGameOver) {
                 let restartPressed = false;
-                if (renderer.xr.getSession()) {
+                const session = renderer.xr.getSession();
+                if (session) {
                     const triggerPulled = triggerPressed[0] || triggerPressed[1];
-                    const aButton1 = controller1.gamepad && controller1.gamepad.buttons.length > 4 && controller1.gamepad.buttons[4].pressed;
-                    const aButton2 = controller2.gamepad && controller2.gamepad.buttons.length > 4 && controller2.gamepad.buttons[4].pressed;
+                    const aButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 4 && controller1.gamepad.buttons[4].pressed;
+                    const aButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 4 && controller2.gamepad.buttons[4].pressed;
                     restartPressed = triggerPulled || aButton1 || aButton2;
                 } else {
                     restartPressed = keyState.Enter;
@@ -883,6 +887,7 @@
 
                 if (restartPressed && !restartWasPressed) {
                     isGameOver = false;
+                    gameOverScreenRendered = false;
                     initGame();
                 }
                 restartWasPressed = restartPressed;
@@ -902,11 +907,11 @@
                 let stickX1 = 0, stickY1 = 0, stickX2 = 0, stickY2 = 0;
                 const deadzone = 0.2;
 
-                if (controller1 && controller1.gamepad && controller1.gamepad.axes.length >= 4) {
+                if (controller1 && controller1.gamepad && controller1.gamepad.axes && controller1.gamepad.axes.length >= 4) {
                     stickX1 = controller1.gamepad.axes[2];
                     stickY1 = controller1.gamepad.axes[3];
                 }
-                if (controller2 && controller2.gamepad && controller2.gamepad.axes.length >= 4) {
+                if (controller2 && controller2.gamepad && controller2.gamepad.axes && controller2.gamepad.axes.length >= 4) {
                     stickX2 = controller2.gamepad.axes[2];
                     stickY2 = controller2.gamepad.axes[3];
                 }
@@ -925,25 +930,23 @@
                 }
 
                 // Use Trigger or A/X button for drawing
-                if (controller1.gamepad || controller2.gamepad) {
-                    const aButton1 = controller1.gamepad && controller1.gamepad.buttons.length > 4 && controller1.gamepad.buttons[4].pressed;
-                    const aButton2 = controller2.gamepad && controller2.gamepad.buttons.length > 4 && controller2.gamepad.buttons[4].pressed;
-                    if (triggerPressed[0] || triggerPressed[1] || aButton1 || aButton2) {
-                        inputState.draw = true;
-                    }
-
-                    // Use B/Y button to exit VR
-                    const bButton1 = controller1.gamepad && controller1.gamepad.buttons.length > 5 && controller1.gamepad.buttons[5].pressed;
-                    const bButton2 = controller2.gamepad && controller2.gamepad.buttons.length > 5 && controller2.gamepad.buttons[5].pressed;
-                    const bButtonPressed = bButton1 || bButton2;
-
-                    if (bButtonPressed && !bButtonWasPressed) {
-                        session.end();
-                        bButtonWasPressed = false; // Reset state after exiting
-                        return; // Stop processing further input for this frame
-                    }
-                    bButtonWasPressed = bButtonPressed;
+                const aButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 4 && controller1.gamepad.buttons[4].pressed;
+                const aButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 4 && controller2.gamepad.buttons[4].pressed;
+                if (triggerPressed[0] || triggerPressed[1] || aButton1 || aButton2) {
+                    inputState.draw = true;
                 }
+
+                // Use B/Y button to exit VR
+                const bButton1 = controller1 && controller1.gamepad && controller1.gamepad.buttons && controller1.gamepad.buttons.length > 5 && controller1.gamepad.buttons[5].pressed;
+                const bButton2 = controller2 && controller2.gamepad && controller2.gamepad.buttons && controller2.gamepad.buttons.length > 5 && controller2.gamepad.buttons[5].pressed;
+                const bButtonPressed = bButton1 || bButton2;
+
+                if (bButtonPressed && !bButtonWasPressed) {
+                    session.end();
+                    bButtonWasPressed = false; // Reset state after exiting
+                    return; // Stop processing further input for this frame
+                }
+                bButtonWasPressed = bButtonPressed;
 
             } else {
                 // --- Keyboard Input ---
@@ -986,11 +989,15 @@
                     document.getElementById('version').style.display = 'block';
                 }
 
-                update2D();
                 draw2D();
 
                 if (gameBoard && gameBoard.material.map) {
-                    gameBoard.material.map.needsUpdate = true;
+                    if (isGameOver && !gameOverScreenRendered) {
+                        gameBoard.material.map.needsUpdate = true;
+                        gameOverScreenRendered = true;
+                    } else if (!isGameOver) {
+                        gameBoard.material.map.needsUpdate = true;
+                    }
                 }
 
                 renderer.render(scene, camera);
