@@ -585,13 +585,26 @@
             }
             normalizeWindingOrder(polygon1); normalizeWindingOrder(polygon2);
             const qixMidpoint = [(cd[0][0] + cd[0][2]) / 2, (cd[0][1] + cd[0][3]) / 2];
-            borderPath = isPointInPolygon(qixMidpoint, polygon1) ? polygon1 : polygon2;
+
+            const newBorder = isPointInPolygon(qixMidpoint, polygon1) ? polygon1 : polygon2;
+            const filledArea = isPointInPolygon(qixMidpoint, polygon1) ? polygon2 : polygon1;
+
+            borderPath = newBorder;
+
+            const startPointOnNewBorder = findClosestPointOnPath(startPoint, borderPath);
+
             sparx.forEach((s, i) => {
                 const oldPos = oldSparxPositions[i];
-                const newPos = findClosestPointOnPath(oldPos, borderPath);
-                s.edgeIndex = newPos.edgeIndex;
-                s.positionOnEdge = newPos.positionOnEdge;
+                if (isPointInPolygon(oldPos, filledArea)) {
+                    s.edgeIndex = startPointOnNewBorder.edgeIndex;
+                    s.positionOnEdge = startPointOnNewBorder.positionOnEdge;
+                } else {
+                    const newPos = findClosestPointOnPath(oldPos, borderPath);
+                    s.edgeIndex = newPos.edgeIndex;
+                    s.positionOnEdge = newPos.positionOnEdge;
+                }
             });
+
             currentDrawnPath = [];
             updateScore();
             dot.x = endPoint[0]; dot.y = endPoint[1]; dot.onBorder = true;
