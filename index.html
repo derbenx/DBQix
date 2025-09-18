@@ -399,18 +399,6 @@
         function draw2D() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (isGameOver) {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.font = '40px monospace';
-                ctx.fillStyle = 'white';
-                ctx.textAlign = 'center';
-                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
-                ctx.font = '20px monospace';
-                ctx.fillText('Pull trigger to restart', canvas.width / 2, canvas.height / 2 + 20);
-                return;
-            }
-
             ctx.fillStyle = 'skyblue';
             if (borderPath.length > 0) {
                 ctx.beginPath();
@@ -440,6 +428,17 @@
             drawQix();
             drawFuse();
             drawSparx();
+
+            if (isGameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '40px monospace';
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = '20px monospace';
+                ctx.fillText('Pull trigger to restart', canvas.width / 2, canvas.height / 2 + 20);
+            }
         }
 
         function isPointOnSegment(p, a, b) {
@@ -848,13 +847,22 @@
             vrUIContext.fillStyle = "white";
             vrUIContext.textAlign = "center";
 
+            // Always draw score and lives
+            vrUIContext.fillText(`Score: ${score.toFixed(2)}%`, vrUICanvas.width / 2, 50);
+            vrUIContext.fillText(`Lives: ${lives}`, vrUICanvas.width / 2, 100);
+
             if (isGameOver) {
-                vrUIContext.fillText("Game Over", vrUICanvas.width / 2, 50);
-                vrUIContext.font = "25px Arial";
-                vrUIContext.fillText("Pull trigger to restart", vrUICanvas.width / 2, 100);
-            } else {
-                vrUIContext.fillText(`Score: ${score.toFixed(2)}%`, vrUICanvas.width / 2, 50);
-                vrUIContext.fillText(`Lives: ${lives}`, vrUICanvas.width / 2, 100);
+                // Overlay Game Over text
+                vrUIContext.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                vrUIContext.fillRect(0, 0, vrUICanvas.width, vrUICanvas.height);
+
+                vrUIContext.font = "bold 60px Arial";
+                vrUIContext.fillStyle = "red";
+                vrUIContext.fillText("Game Over", vrUICanvas.width / 2, 60);
+
+                vrUIContext.font = "30px Arial";
+                vrUIContext.fillStyle = "white";
+                vrUIContext.fillText("Pull trigger to restart", vrUICanvas.width / 2, 110);
             }
             vrUITexture.needsUpdate = true;
         }
