@@ -15,21 +15,29 @@
             color: white;
         }
     </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./three/build/three.module.js",
+                "three/addons/": "./three/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
     <div id="info">QixVR</div>
-    <canvas id="myCanvas" style="display:none;"></canvas>
+    <canvas id="myCanvas"></canvas>
     <div id="score" style="position: absolute; top: 10px; left: 10px; font-size: 24px; color: #333;"></div>
     <div id="lives" style="position: absolute; top: 40px; left: 10px; font-size: 24px; color: #333;"></div>
     <script type="module">
         // Please increase the version number by one digit each time you commit a change.
         var ver = "1.0.1";
 
-        import * as THREE from './three/build/three.module.js';
-        import { VRButton } from './three/examples/jsm/webxr/VRButton.js';
-        import { XRControllerModelFactory } from './three/examples/jsm/webxr/XRControllerModelFactory.js';
-        import { FontLoader } from './three/examples/jsm/loaders/FontLoader.js';
-        import { TextGeometry } from './three/examples/jsm/geometries/TextGeometry.js';
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
         let camera, scene, renderer;
 
