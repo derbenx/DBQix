@@ -51,6 +51,14 @@
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
         let camera, scene, renderer;
+        let scoreContext, scoreTexture;
+
+        const gameState = {
+            lives: 10,
+            totalArea: 0,
+            borderPath: []
+        };
+        window.gameState = gameState;
 
         init();
         animate();
@@ -107,18 +115,29 @@
             board.position.set(0, 1.6, -2);
             scene.add(board);
 
+            // VR UI
             const loader = new FontLoader();
             loader.load('https://cdn.jsdelivr.net/npm/three/examples/fonts/helvetiker_regular.typeface.json', function (font) {
-                const textGeometry = new TextGeometry("v" + ver, {
-                    font: font,
-                    size: 0.1,
-                    height: 0.01,
-                });
-                const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-                camera.add(textMesh);
-                textMesh.position.set(-0.2, -0.5, -1);
+                // Version
+                const versionGeometry = new TextGeometry("v" + ver, { font: font, size: 0.1, height: 0.001 });
+                const versionMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const versionMesh = new THREE.Mesh(versionGeometry, versionMaterial);
+                versionMesh.position.set(-1.9, 1.6 - 2.2, -2);
+                scene.add(versionMesh);
             });
+
+            // Score canvas
+            const scoreCanvas = document.createElement('canvas');
+            scoreCanvas.width = 512;
+            scoreCanvas.height = 128;
+            scoreContext = scoreCanvas.getContext('2d');
+            scoreTexture = new THREE.CanvasTexture(scoreCanvas);
+            const scoreMaterial = new THREE.MeshBasicMaterial({ map: scoreTexture, transparent: true });
+            const scoreGeometry = new THREE.PlaneGeometry(2, 0.5);
+            const scoreMesh = new THREE.Mesh(scoreGeometry, scoreMaterial);
+            scoreMesh.position.set(0, 1.6 + 2.2, -2);
+            scene.add(scoreMesh);
+
 
             scene.add(camera);
 
@@ -136,6 +155,18 @@
         }
 
         function render() {
+            if (scoreContext && window.gameState.borderPath.length > 0) {
+                scoreContext.clearRect(0, 0, 512, 128);
+                scoreContext.fillStyle = 'white';
+                scoreContext.font = '48px Arial';
+                const livesText = "Lives: " + window.gameState.lives;
+                const currentArea = calculatePolygonArea(window.gameState.borderPath);
+                const percentage = (currentArea / window.gameState.totalArea) * 100;
+                const scoreText = "Area Left: " + percentage.toFixed(2) + "%";
+                scoreContext.fillText(livesText, 10, 50);
+                scoreContext.fillText(scoreText, 10, 100);
+                scoreTexture.needsUpdate = true;
+            }
             renderer.render(scene, camera);
         }
     </script>
@@ -180,7 +211,7 @@
         let invincibilityTimer = 0;
         const invincibilityDuration = 30; // in frames, 30fps = 1sec
 
-        function initGame() {
+        function initGame(gameState) {
             const size = 512;
             canvas.width = size;
             canvas.height = size;
@@ -194,9 +225,11 @@
                 [margin, margin + boardSize]
             ];
             originalBorderPath = [...borderPath];
-            totalArea = calculatePolygonArea(originalBorderPath);
+            gameState.totalArea = calculatePolygonArea(originalBorderPath);
+            gameState.borderPath = borderPath;
 
             lives = 10;
+            gameState.lives = lives;
             sparx = [
                 { edgeIndex: 0, positionOnEdge: 0, speed: 1.25, dir: 1 },
                 { edgeIndex: 2, positionOnEdge: 0, speed: 1.25, dir: -1 }
@@ -381,6 +414,7 @@
             invincibilityTimer = invincibilityDuration;
 
             lives--;
+            window.gameState.lives = lives;
             updateLivesDisplay();
 
             // Reset fuse state on any collision
@@ -739,6 +773,7 @@
             }
             return Math.abs(area / 2);
         }
+        window.calculatePolygonArea = calculatePolygonArea;
 
         function normalizeWindingOrder(polygon) {
             let area = 0;
@@ -1044,7 +1079,7 @@
         document.addEventListener('keydown', (event) => { if (event.key in keys) { keys[event.key] = true; event.preventDefault();} });
         document.addEventListener('keyup', (event) => { if (event.key in keys) { keys[event.key] = false; event.preventDefault();} });
         
-        initGame();
+        initGame(window.gameState);
         gameLoop();
     </script>
 </body>
