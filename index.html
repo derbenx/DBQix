@@ -58,7 +58,6 @@
             totalArea: 0,
             borderPath: []
         };
-        window.gameState = gameState;
 
         init();
         animate();
@@ -119,7 +118,7 @@
             const loader = new FontLoader();
             loader.load('https://cdn.jsdelivr.net/npm/three/examples/fonts/helvetiker_regular.typeface.json', function (font) {
                 // Version
-                const versionGeometry = new TextGeometry("v" + ver, { font: font, size: 0.1, height: 0.001 });
+                const versionGeometry = new TextGeometry("v" + ver, { font: font, size: 0.1, height: 0.02 });
                 const versionMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
                 const versionMesh = new THREE.Mesh(versionGeometry, versionMaterial);
                 versionMesh.position.set(-1.9, 1.6 - 2.2, -2);
@@ -142,6 +141,8 @@
             scene.add(camera);
 
             window.addEventListener('resize', onWindowResize);
+
+            window.initGame(gameState);
         }
 
         function onWindowResize() {
@@ -155,13 +156,13 @@
         }
 
         function render() {
-            if (scoreContext && window.gameState.borderPath.length > 0) {
+            if (scoreContext && gameState.borderPath.length > 0) {
                 scoreContext.clearRect(0, 0, 512, 128);
                 scoreContext.fillStyle = 'white';
                 scoreContext.font = '48px Arial';
-                const livesText = "Lives: " + window.gameState.lives;
-                const currentArea = calculatePolygonArea(window.gameState.borderPath);
-                const percentage = (currentArea / window.gameState.totalArea) * 100;
+                const livesText = "Lives: " + gameState.lives;
+                const currentArea = window.calculatePolygonArea(gameState.borderPath);
+                const percentage = (currentArea / gameState.totalArea) * 100;
                 const scoreText = "Area Left: " + percentage.toFixed(2) + "%";
                 scoreContext.fillText(livesText, 10, 50);
                 scoreContext.fillText(scoreText, 10, 100);
@@ -211,7 +212,7 @@
         let invincibilityTimer = 0;
         const invincibilityDuration = 30; // in frames, 30fps = 1sec
 
-        function initGame(gameState) {
+        window.initGame = function(gameState) {
             const size = 512;
             canvas.width = size;
             canvas.height = size;
@@ -891,6 +892,7 @@
 
             const qixMidpoint = [(cd[0][0] + cd[0][2]) / 2, (cd[0][1] + cd[0][3]) / 2];
             borderPath = isPointInPolygon(qixMidpoint, polygon1) ? polygon1 : polygon2;
+            window.gameState.borderPath = borderPath;
 
             sparx.forEach((s, i) => {
                 const oldPos = oldSparxPositions[i];
